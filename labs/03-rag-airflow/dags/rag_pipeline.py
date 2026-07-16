@@ -31,32 +31,36 @@ with DAG(
     description='ท่อส่งข้อมูล RAG อัตโนมัติเมื่อมีไฟล์เอกสารใหม่เข้ามาวาง'
 ) as dag:
 
-    # 1. รอตรวจจับไฟล์ใหม่ในไดเรกทอรี
+    # 1. รอตรวจจับไฟล์ใหม่ในไดเรกทอรี (คอยดึง PDF นโยบายที่นักเรียนนำมาวาง)
     wait_for_file = FileSensor(
         task_id='wait_for_new_document',
-        filepath='new_doc.txt',  # รอไฟล์ที่ชื่อ new_doc.txt ในไดเรกทอรีเชื่อมต่อ
+        filepath='new_policy.pdf',  # รอไฟล์ที่ชื่อ new_policy.pdf ในไดเรกทอรีเชื่อมต่อ
         fs_conn_id='fs_default',  # ระบุ File Connection ID
         poke_interval=15,
         timeout=600,
         mode='poke'
     )
 
-    # 2. ทำการสกัด แบ่งข้อความ และเก็บเข้า ChromaDB
+    # 2. ทำการสกัดข้อความจาก PDF, แบ่งข้อความ และเก็บเข้า ChromaDB
     @task
     def process_and_ingest_document():
+        import fitz  # PyMuPDF
+        
         # เชื่อมโยงโมเดล Gemini โดยใช้ API Key จาก Env
         gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
         if not gemini_api_key:
             raise ValueError("GEMINI_API_KEY environment variable is not set!")
         genai.configure(api_key=gemini_api_key)
 
-        file_path = os.path.join(DATA_DIR, "new_doc.txt")
+        file_path = os.path.join(DATA_DIR, "new_policy.pdf")
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"ไม่พบไฟล์สำหรับประมวลผลที่ {file_path}")
 
-        # อ่านข้อมูลดิบ
-        with open(file_path, "r", encoding="utf-8") as f:
-            document_content = f.read()
+        # สกัดข้อความจากไฟล์ PDF
+        doc = fitz.open(file_path)
+        document_content = ""
+        for page in doc:
+            document_content += page.get_text()
 
         # ทำ Chunking
         splitter = RecursiveCharacterTextSplitter(
@@ -92,16 +96,16 @@ with DAG(
                 ids=[f"doc_{i}"],
                 embeddings=[vector],
                 documents=[chunk],
-                metadatas=[{"source": "new_doc.txt", "chunk_index": i}]
+                metadatas=[{"source": "new_policy.pdf", "chunk_index": i}]
             )
 
         # เคลื่อนย้ายไฟล์ที่ประมวลผลแล้วไปโฟลเดอร์อื่นเพื่อไม่ให้รันซ้ำซ้อน
         os.makedirs(PROCESSED_DIR, exist_ok=True)
-        dest_path = os.path.join(PROCESSED_DIR, f"processed_{datetime.now().strftime('%Y%m%d%H%M%S')}.txt")
+        dest_path = os.path.join(PROCESSED_DIR, f"processed_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf")
         shutil.move(file_path, dest_path)
 
         # ส่งต่อเฉพาะหัวข้อหรือ ID ไป Task ถัดไป (Claim Check Pattern)
-        return "สำเร็จ: โหลดข้อมูล RAG และนำไฟล์เข้าโฟลเดอร์เก็บข้อมูลถาวรเรียบร้อย"
+        return "สำเร็จ: โหลดข้อมูล RAG จาก PDF และนำไฟล์เข้าโฟลเดอร์เก็บข้อมูลถาวรเรียบร้อย"
 
     # 3. สรุปใจความสำคัญของข้อมูลใหม่ผ่าน @task.llm (Airflow 3 ฟีเจอร์)
     # ฟังก์ชันนี้จำลองการใช้งาน LLM Operator ที่คุยกับ Gemini คิวรีผลลัพธ์ผ่าน Prompt

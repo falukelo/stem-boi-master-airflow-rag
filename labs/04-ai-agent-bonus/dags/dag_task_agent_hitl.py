@@ -47,12 +47,12 @@ def search_vector_db_tool(query: str) -> str:
 
 
 with DAG(
-    dag_id='agentic_rag_with_hitl',
+    dag_id='lab4b_task_agent_hitl',
     default_args=default_args,
     schedule_interval=None,
     catchup=False,
-    tags=['kx', 'agent', 'hitl', 'airflow3'],
-    description='ระบบ AI Agent ตอบคำถามสวัสดิการร่วมกับขั้นตอน Human-in-the-loop เพื่อรอตรวจคำตอบ'
+    tags=['kx', 'lab4b', 'agent', 'hitl', 'airflow3'],
+    description='Lab 4B: เอเจนต์ตัดสินใจค้นหาข้อมูล (@task.agent) พร้อมระบบตรวจสอบอนุมัติโดยมนุษย์ (HITL)'
 ) as dag:
 
     # 1. รับข้อคำถามจากผู้ใช้ผ่านพารามิเตอร์ของ DAG (DAG Run Configuration)

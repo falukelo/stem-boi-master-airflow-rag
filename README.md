@@ -24,7 +24,7 @@
 | **10:00–12:00** | [02 RAG Pipeline Architecture for Data Engineers](./labs/02-rag-architecture/README.md) | 60 นาทีเนื้อหา + 60 นาที Lab | [Lab 02: RAG with ChromaDB](./labs/02-rag-architecture/notebooks/rag_intro.ipynb) |
 | **12:00–13:00** | *พักกลางวัน (Lunch Break)* | — | — |
 | **13:00–14:30** | [03 Project Workshop: Implementing RAG via Airflow Operators](./labs/03-rag-airflow/README.md) | 25 นาที demo + 65 นาที Lab | [Lab 03: RAG ingestion with Airflow](./labs/03-rag-airflow/dags/rag_pipeline.py) |
-| **14:30–15:30** | [04 Bonus: Introduction to AI Agent Orchestration](./labs/04-ai-agent-bonus/README.md) | 25 นาทีเนื้อหา + 35 นาที Lab | [Lab 04: RAG agent with HITL](./labs/04-ai-agent-bonus/dags/agentic_rag.py) |
+| **14:30–15:30** | [04 Bonus: Introduction to AI Agent Orchestration](./labs/04-ai-agent-bonus/README.md) | 25 นาทีเนื้อหา + 35 นาที Lab | [Lab 04A: Simple RAG](./labs/04-ai-agent-bonus/dags/dag_task_llm.py) <br> [Lab 04B: Agent with HITL](./labs/04-ai-agent-bonus/dags/dag_task_agent_hitl.py) |
 | **15:30–16:00** | [05 MLOps/DataOps](./labs/05-mlops-dataops/README.md) | 22 นาทีสรุป + 8 นาที Q&A และ exit ticket | — |
 
 ---
