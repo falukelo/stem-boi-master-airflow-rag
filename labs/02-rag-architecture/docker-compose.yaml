@@ -1,0 +1,20 @@
+services:
+  jupyter:
+    image: jupyter/base-notebook:python-3.11.9
+    container_name: jupyter_rag_container
+    ports:
+      - "8888:8888"
+    volumes:
+      - .:/home/jovyan/work
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    command: >
+      start-notebook.sh 
+      --NotebookApp.token='' 
+      --NotebookApp.password=''
+    user: root
+    entrypoint: []
+    # Auto install required packages on start
+    command: >
+      bash -c "pip install google-generativeai chromadb langchain-text-splitters PyMuPDF && start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''"
