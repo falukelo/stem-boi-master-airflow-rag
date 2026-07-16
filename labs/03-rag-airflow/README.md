@@ -1,53 +1,58 @@
-# Lab 03: Automated RAG Pipeline via Airflow 3
+# Lab 03: Modular RAG Ingestion & Query via Airflow 3
 
-ห้องปฏิบัติการนี้มุ่งเน้นการแปลงโค้ดจาก Jupyter Notebook ในแล็บ 2 มาสร้างเป็น **Automated Data Pipeline (ท่อส่งข้อมูลอัตโนมัติ)** บน **Apache Airflow 3.x** โดยใช้เทคนิค Sensor คอยจับไฟล์ใหม่ และประมวลผล RAG ผ่านตัวช่วย `@task.llm` ร่วมกับฐานข้อมูล ChromaDB แบบถาวร (Persistent Storage)
+ห้องปฏิบัติการนี้สอนการออกแบบระบบท่อส่งข้อมูล RAG แบบแยกโมดูลการทำงานและขั้นตอนการเรียกสืบค้นข้อมูลจริงในระดับโปรดักชัน โดยแบ่งออกเป็น **2 DAGs** หลัก:
+
+1.  **`lab03_rag_ingestion`** (ท่อส่งข้อมูลนำเข้า): คอยตรวจจับไฟล์เอกสาร PDF นำมาสกัดเนื้อหา แบ่งคำ ทำเวกเตอร์ และจัดเก็บลงฐานข้อมูลเวกเตอร์แบบ Idempotent
+2.  **`lab03_rag_query_llm`** (ท่อเรียกสืบค้นและตอบกลับ): รับข้อความคำถาม ค้นหาข้อมูลอ้างอิง และใช้ `@task.llm` จากโมเดล Gemini ตอบข้อมูลกลับพนักงาน
 
 ---
 
-## 1. สิ่งที่คุณจะได้เรียนรู้ (Learning Objectives)
-*   การเริ่มต้นใช้งานและทำความรู้จักหน้าจอ UI ของ Apache Airflow 3.x
-*   การตั้งค่าการเชื่อมต่อภายนอก (Connections) และการจัดการ API Keys อย่างปลอดภัย
-*   การใช้ `FileSensor` ในการตรวจจับไฟล์ข้อมูลเข้าใหม่แบบอัตโนมัติ
-*   การเขียน DAG แบบ TaskFlow API และการประยุกต์ใช้งาน `@task.llm`
-*   การประยุกต์ใช้ **Claim Check Pattern** ในการส่งผ่านข้อมูลข้อความขนาดใหญ่ใน DAG
+## 1. การแบ่งโมดูลระดับ Task ในท่อส่งข้อมูลนำเข้า (`lab03_rag_ingestion`)
+ในการปฏิบัติการจริง เราหลีกเลี่ยงการเขียนโค้ดทั้งหมดกระจุกอยู่ในฟังก์ชันเดียว โดยแยก Task ออกเป็น:
+*   **`wait_for_new_document`** (FileSensor): คอยตรวจจับไฟล์ `new_policy.pdf`
+*   **`read_pdf_task`**: เปิดสกัดเนื้อหาจาก PDF ออกมาเป็นตัวอักษรดิบด้วย PyMuPDF (`fitz`)
+*   **`chunk_text_task`**: แบ่งข้อความเป็นชิ้นเล็กๆ ขนาด 250 ตัวอักษรพร้อม overlap 50 ตัวอักษร
+*   **`embed_text_task`**: เรียกแปลงคำศัพท์เป็นเวกเตอร์ 768 มิติด้วยโมเดล `text-embedding-004` ผ่าน Gemini API
+*   **`insert_to_vector_db_task`**: นำข้อมูลและเวกเตอร์บันทึกลง ChromaDB และเคลื่อนย้ายเอกสารไปโฟลเดอร์อื่นเพื่อจบกระบวนการรันอย่างมีระเบียบ
 
 ---
 
 ## 2. ขั้นตอนการเตรียมระบบและการรัน (Setup Instructions)
 
-### ขั้นตอนที่ 1: ตั้งค่า API Key
-ตรวจสอบให้แน่ใจว่าได้ระบุคีย์ Google AI Studio ในระบบ:
+### ขั้นตอนที่ 1: ตั้งค่า API Key และเปิดสิทธิ์ Docker
 ```bash
 export GEMINI_API_KEY="your-gemini-api-key-here"
-```
-
-### ขั้นตอนที่ 2: รันระบบ Airflow 3
-เริ่มการติดตั้งฐานข้อมูล Postgres และตัวประมวลผล Airflow:
-```bash
-# กำหนดสิทธิ์ผู้ใช้งานบนระบบ Linux/macOS
 echo -e "AIRFLOW_UID=$(id -u)" > .env
-
-# เริ่มระบบคอนเทนเนอร์
 docker-compose up -d
 ```
-*ระบบจะเปิดเว็บบราวเซอร์ให้เข้าควบคุมหน้าจอที่ `http://localhost:8080` (Username: `admin` / Password: `admin`)*
+*(เข้าควบคุมหน้าจอระบบจำลองที่ `http://localhost:8080` (Username: `admin` / Password: `admin`))*
 
-### ขั้นตอนที่ 3: ตั้งค่าการเชื่อมต่อในหน้า UI (สำคัญมาก)
-เพื่อให้ DAG ทำงานร่วมกับโมเดลภายนอกได้โดยไม่ใส่คีย์ลงในโค้ดดิบ:
-1. เข้าสู่ระบบ Airflow UI (localhost:8080)
-2. ไปที่เมนู **Admin -> Connections**
-3. กดปุ่ม **+ (Add a new record)**
-4. กรอกข้อมูลดังนี้:
+### ขั้นตอนที่ 2: ตั้งค่าการเชื่อมต่อในหน้า UI
+1. เข้าไปที่ Airflow UI -> เมนู **Admin -> Connections**
+2. กดปุ่ม **+** สร้าง Record ใหม่:
    *   **Connection Id**: `gemini_conn`
-   *   **Connection Type**: เลือกประเภท AI Provider หรือ Custom (ขึ้นอยู่กับ Provider ที่ลง ในที่นี้ตั้งค่าแบบ HTTP หรือ Generic connection แล้วระบุ API Key)
+   *   **Connection Type**: Generic หรือ HTTP
    *   **Password/API Key**: ระบุ `GEMINI_API_KEY` ของคุณ
-5. กดปุ่ม **Save**
+3. กด **Save**
 
-### ขั้นตอนที่ 4: ทดสอบกระบวนการทำ RAG อัตโนมัติ
-1. ไปที่หน้าจอหลัก เปิดสวิตช์เริ่มการทำงาน DAG ชื่อ `automated_rag_pipeline` (ให้เป็นสีฟ้า)
-2. สังเกตว่า Task แรก `wait_for_new_document` จะขึ้นสถานะสีเหลืองเข้ม (Sensor กำลังรอไฟล์ใหม่)
-3. ให้คุณคัดลอกไฟล์เอกสารนโยบายจำลองที่เตรียมไว้ในโฟลเดอร์ `labs/mock_documents/` (เช่น `policy_leave.pdf` หรือ `policy_medical.pdf`) ไปวางไว้ในโฟลเดอร์ `./data/` โดยเปลี่ยนชื่อไฟล์เป็น `new_policy.pdf`
-   *(ตัวอย่างคำสั่ง: `cp ../mock_documents/policy_leave.pdf ./data/new_policy.pdf`)*
-4. สังเกตบนหน้าจอ Airflow UI: Sensor จะตรวจพบไฟล์โดยอัตโนมัติ, ระบบจะดึงข้อความจากไฟล์ PDF มาแบ่งหน้า (Chunk), แปลงเวกเตอร์ลง ChromaDB และสรุปผลผ่าน Gemini (`summarize_new_data`) จนท่อส่งแสดงผลสำเร็จเป็นสีเขียว
-5. เข้าไปดูข้อความสรุปของเอกสารที่คุณส่งไปได้ที่เมนู **Logs** หรือ XCom ของ Task `summarize_new_data`
+---
 
+## 3. ขั้นตอนการทดสอบทำ RAG
+
+### ขั้นตอนที่ 3.1: รันท่อข้อมูลนำเข้า (Ingestion Phase)
+1. เปิดสวิตช์เริ่มการทำงาน DAG ชื่อ `lab03_rag_ingestion`
+2. คัดลอกไฟล์เอกสารนโยบายในเครื่องของคุณ เช่น `labs/mock_documents/policy_leave.pdf` ไปวางในโฟลเดอร์หลักสูตร `./data/` และเปลี่ยนชื่อไฟล์ปลายทางเป็น `new_policy.pdf`
+   *(คำสั่ง: `cp ../mock_documents/policy_leave.pdf ./data/new_policy.pdf`)*
+3. สังเกตหน้าจอ Airflow: ตัว Sensor จะเริ่มรันผ่าน และ Task ต่างๆ (Read -> Chunk -> Embed -> Insert) จะทยอยเปลี่ยนเป็นสีเขียวจนเสร็จสิ้น
+
+### ขั้นตอนที่ 3.2: สอบถามข้อมูลผ่านระบบ RAG (Query Phase)
+1. ค้นหา DAG ชื่อ `lab03_rag_query_llm` บนหน้าหลัก
+2. กดปุ่มลูกศรข้างขวาของปุ่มรัน เลือก **Trigger w/ config**
+3. ป้อนคำถามจำลองที่สอดคล้องกับเอกสารที่คุณนำเข้าเมื่อครู่ในรูปแบบ JSON เช่น:
+   ```json
+   {
+     "query": "ฉันทำงานครบกี่วันถึงจะได้สิทธิ์วันลาพักร้อนประจำปี และได้กี่วันทำการ?"
+   }
+   ```
+4. กดปุ่ม **Trigger**
+5. ตรวจสอบคำตอบสรุปของโมเดล Gemini ได้ที่ XCom หรือ Logs ของ Task `generate_response_with_llm`

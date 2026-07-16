@@ -4,7 +4,6 @@ import os
 import shutil
 from airflow import DAG
 from airflow.decorators import task
-# ใน Airflow 3 ระบบย้าย FileSensor ไปอยู่ใน Standard Provider
 from airflow.providers.standard.sensors.filesystem import FileSensor
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import google.generativeai as genai
@@ -23,100 +22,109 @@ default_args = {
 }
 
 with DAG(
-    dag_id='automated_rag_pipeline',
+    dag_id='lab03_rag_ingestion',
     default_args=default_args,
-    schedule_interval=None,  # รันเฉพาะกิจ หรือทริกเกอร์มือ
+    schedule_interval=None,
     catchup=False,
-    tags=['kx', 'rag', 'airflow3'],
-    description='ท่อส่งข้อมูล RAG อัตโนมัติเมื่อมีไฟล์เอกสารใหม่เข้ามาวาง'
+    tags=['kx', 'lab3', 'ingestion', 'airflow3'],
+    description='Lab 3: ท่อส่งข้อมูลหลักสกัดเอกสาร PDF และบันทึกเวกเตอร์ลงฐานข้อมูล ChromaDB'
 ) as dag:
 
-    # 1. รอตรวจจับไฟล์ใหม่ในไดเรกทอรี (คอยดึง PDF นโยบายที่นักเรียนนำมาวาง)
+    # Task 1: รอตรวจจับไฟล์ใหม่ในไดเรกทอรี
     wait_for_file = FileSensor(
         task_id='wait_for_new_document',
-        filepath='new_policy.pdf',  # รอไฟล์ที่ชื่อ new_policy.pdf ในไดเรกทอรีเชื่อมต่อ
-        fs_conn_id='fs_default',  # ระบุ File Connection ID
+        filepath='new_policy.pdf',
+        fs_conn_id='fs_default',
         poke_interval=15,
         timeout=600,
         mode='poke'
     )
 
-    # 2. ทำการสกัดข้อความจาก PDF, แบ่งข้อความ และเก็บเข้า ChromaDB
+    # Task 2: สกัดข้อความจาก PDF (Read PDF Task)
     @task
-    def process_and_ingest_document():
+    def read_pdf_task():
         import fitz  # PyMuPDF
-        
-        # เชื่อมโยงโมเดล Gemini โดยใช้ API Key จาก Env
-        gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
-        if not gemini_api_key:
-            raise ValueError("GEMINI_API_KEY environment variable is not set!")
-        genai.configure(api_key=gemini_api_key)
-
         file_path = os.path.join(DATA_DIR, "new_policy.pdf")
         if not os.path.exists(file_path):
-            raise FileNotFoundError(f"ไม่พบไฟล์สำหรับประมวลผลที่ {file_path}")
-
-        # สกัดข้อความจากไฟล์ PDF
+            raise FileNotFoundError(f"ไม่พบไฟล์ที่ {file_path}")
+            
         doc = fitz.open(file_path)
         document_content = ""
         for page in doc:
             document_content += page.get_text()
+            
+        return document_content
 
-        # ทำ Chunking
+    # Task 3: แบ่งข้อความเป็นขนาดเล็ก (Chunking Task)
+    @task
+    def chunk_text_task(raw_text: str):
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=250,
             chunk_overlap=50,
             separators=["\n\n", "\n", " ", ""]
         )
-        chunks = splitter.split_text(document_content)
+        chunks = splitter.split_text(raw_text)
+        return chunks
 
-        # ตั้งค่า ChromaDB Client
-        # ใช้ PersistentClient เพื่อให้ข้อมูลไม่หายไปเมื่อปิดคอนเทนเนอร์
-        chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
-        collection_name = "kx_airflow_documents"
+    # Task 4: แปลงข้อความเป็นเวกเตอร์ (Embedding Task)
+    @task
+    def embed_text_task(chunks: list):
+        gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
+        if not gemini_api_key:
+            raise ValueError("GEMINI_API_KEY is not set!")
+        genai.configure(api_key=gemini_api_key)
         
-        # รีเซ็ตหรือOverwriteเพื่อความทำงานซ้ำได้ผลเดิม (Idempotency)
-        try:
-            chroma_client.delete_collection(name=collection_name)
-        except Exception:
-            pass
-        collection = chroma_client.create_collection(name=collection_name)
-
-        # บันทึกข้อมูลและเวกเตอร์
+        embedded_data = []
         for i, chunk in enumerate(chunks):
-            # เรียกแปลงเวกเตอร์ผ่าน Gemini Embeddings
             result = genai.embed_content(
                 model="models/text-embedding-004",
                 contents=chunk,
                 task_type="retrieval_document"
             )
-            vector = result['embedding']
-            
-            collection.add(
-                ids=[f"doc_{i}"],
-                embeddings=[vector],
-                documents=[chunk],
-                metadatas=[{"source": "new_policy.pdf", "chunk_index": i}]
-            )
+            embedded_data.append({
+                "id": f"doc_{datetime.now().strftime('%Y%m%d%H%M%S')}_{i}",
+                "chunk": chunk,
+                "embedding": result['embedding']
+            })
+        return embedded_data
 
-        # เคลื่อนย้ายไฟล์ที่ประมวลผลแล้วไปโฟลเดอร์อื่นเพื่อไม่ให้รันซ้ำซ้อน
+    # Task 5: บันทึกเวกเตอร์ลงฐานข้อมูล ChromaDB (Insert DB Task)
+    @task
+    def insert_to_vector_db_task(embedded_data: list):
+        chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
+        collection_name = "kx_airflow_documents"
+        
+        # รีเซ็ตหรือ Overwrite เพื่อความทำงานซ้ำได้ผลเดิม (Idempotency)
+        try:
+            chroma_client.delete_collection(name=collection_name)
+        except Exception:
+            pass
+        collection = chroma_client.create_collection(name=collection_name)
+        
+        ids = [item["id"] for item in embedded_data]
+        embeddings = [item["embedding"] for item in embedded_data]
+        documents = [item["chunk"] for item in embedded_data]
+        metadatas = [{"source": "new_policy.pdf", "chunk_index": i} for i in range(len(embedded_data))]
+        
+        collection.add(
+            ids=ids,
+            embeddings=embeddings,
+            documents=documents,
+            metadatas=metadatas
+        )
+        
+        # ย้ายไฟล์หลังนำเข้าสำเร็จ
+        file_path = os.path.join(DATA_DIR, "new_policy.pdf")
         os.makedirs(PROCESSED_DIR, exist_ok=True)
         dest_path = os.path.join(PROCESSED_DIR, f"processed_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf")
         shutil.move(file_path, dest_path)
+        
+        return f"บันทึกข้อมูลเรียบร้อยจำนวน {len(embedded_data)} Chunks"
 
-        # ส่งต่อเฉพาะหัวข้อหรือ ID ไป Task ถัดไป (Claim Check Pattern)
-        return "สำเร็จ: โหลดข้อมูล RAG จาก PDF และนำไฟล์เข้าโฟลเดอร์เก็บข้อมูลถาวรเรียบร้อย"
+    # ลำดับการทำงาน
+    raw_text = read_pdf_task()
+    chunks = chunk_text_task(raw_text)
+    embedded_data = embed_text_task(chunks)
+    ingestion_status = insert_to_vector_db_task(embedded_data)
 
-    # 3. สรุปใจความสำคัญของข้อมูลใหม่ผ่าน @task.llm (Airflow 3 ฟีเจอร์)
-    # ฟังก์ชันนี้จำลองการใช้งาน LLM Operator ที่คุยกับ Gemini คิวรีผลลัพธ์ผ่าน Prompt
-    @task.llm(llm_conn_id="gemini_conn")
-    def summarize_new_data(ingest_status: str, prompt: str = "กรุณาสรุปใจความสำคัญของข้อมูลที่เพิ่งโหลดเข้าสู่ Vector DB"):
-        # หมายเหตุ: ใน Airflow 3 ฟังก์ชันที่มีการตกแต่งด้วย @task.llm จะประมวลผลคำขอ LLM 
-        # และการส่งต่อพารามิเตอร์ผ่าน Provider Connection ไปหา Gemini โดยอัตโนมัติ
-        return f"{prompt}. สถานะข้อมูล: {ingest_status}"
-
-    # กำหนดความสัมพันธ์
-    ingest_task = process_and_ingest_document()
-    summary_task = summarize_new_data(ingest_task)
-
-    wait_for_file >> ingest_task
+    wait_for_file >> raw_text
