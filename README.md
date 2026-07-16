@@ -23,8 +23,8 @@
 | **09:00–10:00** | [01 Data Engineers Foundations & Airflow Mastery Concepts](./labs/01-foundation/README.md) | 45 นาทีทฤษฎี + 15 นาที Airflow UI walkthrough | สื่อการสอนพื้นฐาน Data Pipeline และสถาปัตยกรรม Airflow 3.x |
 | **10:00–12:00** | [02 RAG Pipeline Architecture for Data Engineers](./labs/02-rag-architecture/README.md) | 60 นาทีทฤษฎี + 60 นาที Lab | [Lab 02: RAG with ChromaDB](./labs/02-rag-architecture/notebooks/rag_intro.ipynb) <br> *(ใช้ทดสอบอ่านไฟล์ PDF `policy_wfh.pdf`)* |
 | **12:00–13:00** | *พักกลางวัน (Lunch Break)* | — | — |
-| **13:00–14:30** | [03 Project Workshop: Implementing RAG via Airflow Operators](./labs/03-rag-airflow/README.md) | 25 นาที demo + 65 นาที Lab | **1. RAG Ingestion (แยก Task):** [rag_pipeline.py](./labs/03-rag-airflow/dags/rag_pipeline.py)<br>**2. RAG Query LLM:** [rag_query_llm.py](./labs/03-rag-airflow/dags/rag_query_llm.py) |
-| **14:30–15:30** | [04 Bonus: Introduction to AI Agent Orchestration](./labs/04-ai-agent-bonus/README.md) | 25 นาทีเนื้อหา + 35 นาที Lab | **AI Agent & HITL:** [dag_task_agent_hitl.py](./labs/04-ai-agent-bonus/dags/dag_task_agent_hitl.py)<br>*(เปรียบเทียบการรัน `@task.llm` vs `@task.agent`)* |
+| **13:00–14:30** | [03 Project Workshop: Implementing RAG via Airflow Operators](./labs/03-rag-airflow/README.md) | 25 นาที demo + 65 นาที Lab | **1. HR Ingestion:** [rag_pipeline.py](./labs/03-rag-airflow/dags/rag_pipeline.py)<br>**2. IT Ingestion:** [it_pipeline.py](./labs/03-rag-airflow/dags/it_pipeline.py)<br>**3. RAG Query LLM:** [rag_query_llm.py](./labs/03-rag-airflow/dags/rag_query_llm.py) |
+| **14:30–15:30** | [04 Bonus: Introduction to AI Agent Orchestration](./labs/04-ai-agent-bonus/README.md) | 25 นาทีเนื้อหา + 35 นาที Lab | **Multi-Agent & HITL:** [dag_task_agent_hitl.py](./labs/04-ai-agent-bonus/dags/dag_task_agent_hitl.py)<br>*(เปรียบเทียบการรัน `@task.llm` vs `@task.agent`)* |
 | **15:30–16:00** | [05 MLOps/DataOps](./labs/05-mlops-dataops/README.md) | 22 นาทีสรุป + 8 นาที Q&A และ exit ticket | สรุปกรอบความคิด DataOps และ MLOps สำหรับระบบโปรดักชัน |
 
 ---
@@ -42,17 +42,19 @@ boi-master-airflow-rag/
 │   │   ├── policy_wfh.pdf            # เอกสารนโยบาย WFH (ใช้ในแล็บ 2)
 │   │   ├── policy_leave.pdf          # เอกสารนโยบายวันลาพักร้อน (ใช้ในแล็บ 3/4)
 │   │   ├── policy_medical.pdf        # เอกสารนโยบายรักษาพยาบาล (ใช้ในแล็บ 3/4)
-│   │   └── policy_training.pdf       # เอกสารงบเรียนรู้อัปสกิล (ใช้ในแล็บ 3/4)
+│   │   ├── policy_training.pdf       # เอกสารงบเรียนรู้อัปสกิล (ใช้ในแล็บ 3/4)
+│   │   └── policy_itsupport.pdf      # เอกสารนโยบายไอทีซัพพอร์ต (ใช้ในแล็บ 3/4)
 │   ├── 01-foundation/                # เอกสารปูพื้นฐาน DE และการสแกนหน้า UI
 │   ├── 02-rag-architecture/          # แล็บ Jupyter สกัดข้อความจาก PDF และทำ RAG
-│   ├── 03-rag-airflow/               # แล็บรัน Airflow 3 ตรวจจับ PDF และทำ RAG อัตโนมัติ (แยก Task)
+│   ├── 03-rag-airflow/               # แล็บรัน Airflow 3 ตรวจจับ PDF และทำ RAG อัตโนมัติ (แยกถัง HR / IT)
 │   │   ├── dags/
-│   │   │   ├── rag_pipeline.py       # DAG โหลดข้อมูลเข้าฐานข้อมูลแบบแยก 5 Tasks
-│   │   │   └── rag_query_llm.py      # DAG เรียกตอบข้อมูลโดยใช้ @task.llm
+│   │   │   ├── rag_pipeline.py       # DAG โหลดข้อมูลเข้าคลัง kx_hr_documents
+│   │   │   ├── it_pipeline.py        # DAG โหลดข้อมูลเข้าคลัง kx_it_documents
+│   │   │   └── rag_query_llm.py      # DAG เรียกสืบค้นข้อมูลรายถังโดยใช้ @task.llm
 │   │   └── docker-compose.yaml
 │   ├── 04-ai-agent-bonus/            # แล็บ AI Agent (@task.agent) + อนุมัติโดยมนุษย์ (HITL)
 │   │   ├── dags/
-│   │   │   └── dag_task_agent_hitl.py # DAG เอเจนต์ตัดสินใจสืบค้นอัตโนมัติร่วมกับ HITL
+│   │   │   └── dag_task_agent_hitl.py # DAG เอเจนต์ตัดสินใจสืบค้นอัตโนมัติแยกถังร่วมกับ HITL
 │   │   └── README.md
 │   └── 05-mlops-dataops/             # เอกสารทบทวนการมอนิเตอร์และดูแลท่อส่งในโปรดักชัน
 └── รายละเอียดหลักสูตร KX_ Mastering Workflow .pdf   # รายละเอียดสเกดดูลหลักสูตรต้นฉบับ

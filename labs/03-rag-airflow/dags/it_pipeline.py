@@ -21,17 +21,17 @@ default_args = {
 }
 
 with DAG(
-    dag_id='lab03_hr_ingestion',
+    dag_id='lab03_it_ingestion',
     default_args=default_args,
     schedule_interval=None,
     catchup=False,
-    tags=['kx', 'lab3', 'hr', 'ingestion', 'airflow3'],
-    description='Lab 3: ท่อส่งข้อมูล HR สกัดเอกสาร PDF และบันทึกเวกเตอร์ลงคลัง kx_hr_documents'
+    tags=['kx', 'lab3', 'it', 'ingestion', 'airflow3'],
+    description='Lab 3: ท่อส่งข้อมูล IT สกัดเอกสาร PDF และบันทึกเวกเตอร์ลงคลัง kx_it_documents'
 ) as dag:
 
     wait_for_file = FileSensor(
-        task_id='wait_for_hr_document',
-        filepath='hr_policy.pdf',  # คอยตรวจจับไฟล์ชื่อ hr_policy.pdf
+        task_id='wait_for_it_document',
+        filepath='it_policy.pdf',  # คอยตรวจจับไฟล์ชื่อ it_policy.pdf
         fs_conn_id='fs_default',
         poke_interval=15,
         timeout=600,
@@ -41,7 +41,7 @@ with DAG(
     @task
     def read_pdf_task():
         import fitz
-        file_path = os.path.join(DATA_DIR, "hr_policy.pdf")
+        file_path = os.path.join(DATA_DIR, "it_policy.pdf")
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"ไม่พบไฟล์ที่ {file_path}")
             
@@ -76,7 +76,7 @@ with DAG(
                 task_type="retrieval_document"
             )
             embedded_data.append({
-                "id": f"hr_{datetime.now().strftime('%Y%m%d%H%M%S')}_{i}",
+                "id": f"it_{datetime.now().strftime('%Y%m%d%H%M%S')}_{i}",
                 "chunk": chunk,
                 "embedding": result['embedding']
             })
@@ -85,7 +85,7 @@ with DAG(
     @task
     def insert_to_vector_db_task(embedded_data: list):
         chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
-        collection_name = "kx_hr_documents"  # จัดเก็บในถัง HR แยกต่างหาก
+        collection_name = "kx_it_documents"  # จัดเก็บในถัง IT แยกต่างหาก
         
         try:
             chroma_client.delete_collection(name=collection_name)
@@ -96,7 +96,7 @@ with DAG(
         ids = [item["id"] for item in embedded_data]
         embeddings = [item["embedding"] for item in embedded_data]
         documents = [item["chunk"] for item in embedded_data]
-        metadatas = [{"source": "hr_policy.pdf", "chunk_index": i} for i in range(len(embedded_data))]
+        metadatas = [{"source": "it_policy.pdf", "chunk_index": i} for i in range(len(embedded_data))]
         
         collection.add(
             ids=ids,
@@ -106,12 +106,12 @@ with DAG(
         )
         
         # ย้ายไฟล์หลังนำเข้าสำเร็จ
-        file_path = os.path.join(DATA_DIR, "hr_policy.pdf")
+        file_path = os.path.join(DATA_DIR, "it_policy.pdf")
         os.makedirs(PROCESSED_DIR, exist_ok=True)
-        dest_path = os.path.join(PROCESSED_DIR, f"processed_hr_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf")
+        dest_path = os.path.join(PROCESSED_DIR, f"processed_it_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf")
         shutil.move(file_path, dest_path)
         
-        return f"บันทึกข้อมูล HR เรียบร้อยจำนวน {len(embedded_data)} Chunks"
+        return f"บันทึกข้อมูล IT เรียบร้อยจำนวน {len(embedded_data)} Chunks"
 
     raw_text = read_pdf_task()
     chunks = chunk_text_task(raw_text)

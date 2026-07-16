@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 import os
 from airflow import DAG
 from airflow.decorators import task
-# ใน Airflow 3 ระบบมี Standard Operators สำหรับ Human-in-the-loop
 from airflow.providers.standard.operators.hitl import HITLOperator
 import google.generativeai as genai
 import chromadb
@@ -17,100 +16,153 @@ default_args = {
     'retry_delay': timedelta(seconds=15),
 }
 
-# นิยามเครื่องมือสำหรับให้ AI Agent เรียกใช้งาน (Toolsets)
-def search_vector_db_tool(query: str) -> str:
-    """ค้นหาข้อมูลเกี่ยวกับกฎระเบียบสวัสดิการของพนักงานในบริษัทจากฐานข้อมูลเวกเตอร์ ChromaDB"""
+# ----------------- เครื่องมือของระบบ (Toolsets) -----------------
+
+def search_hr_db_tool(query: str) -> str:
+    """ค้นหาข้อมูลเกี่ยวกับกฎระเบียบและสวัสดิการของแผนก HR (วันลา, WFH, ค่ารักษาพยาบาล) จากคลังข้อมูลเวกเตอร์ kx_hr_documents"""
     try:
-        # เชื่อมต่อ ChromaDB
         chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
-        collection = chroma_client.get_collection(name="kx_airflow_documents")
+        collection = chroma_client.get_collection(name="kx_hr_documents")
         
-        # แปลงข้อความเป็นเวกเตอร์คำถาม
         gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
         genai.configure(api_key=gemini_api_key)
-        
         query_vector = genai.embed_content(
             model="models/text-embedding-004",
             contents=query,
             task_type="retrieval_query"
         )['embedding']
         
-        results = collection.query(
-            query_embeddings=[query_vector],
-            n_results=2
-        )
-        # นำคำตอบและแหล่งที่มารวมกัน
-        documents = results['documents'][0]
-        return "\n---\n".join(documents)
+        results = collection.query(query_embeddings=[query_vector], n_results=2)
+        return "\n---\n".join(results['documents'][0])
     except Exception as e:
-        return f"ไม่สามารถดึงข้อมูลได้เนื่องจากเกิดข้อผิดพลาด: {str(e)}"
+        return f"ไม่พบข้อมูลสวัสดิการ HR หรือเกิดข้อผิดพลาด: {str(e)}"
+
+def search_it_db_tool(query: str) -> str:
+    """ค้นหาข้อมูลเกี่ยวกับคู่มือ IT Support, ความปลอดภัย, คอมพิวเตอร์ และรหัสผ่าน จากคลังข้อมูลเวกเตอร์ kx_it_documents"""
+    try:
+        chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
+        collection = chroma_client.get_collection(name="kx_it_documents")
+        
+        gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
+        genai.configure(api_key=gemini_api_key)
+        query_vector = genai.embed_content(
+            model="models/text-embedding-004",
+            contents=query,
+            task_type="retrieval_query"
+        )['embedding']
+        
+        results = collection.query(query_embeddings=[query_vector], n_results=2)
+        return "\n---\n".join(results['documents'][0])
+    except Exception as e:
+        return f"ไม่พบข้อมูลช่วยเหลือ IT หรือเกิดข้อผิดพลาด: {str(e)}"
 
 
 with DAG(
-    dag_id='lab4b_task_agent_hitl',
+    dag_id='lab04_multi_agent_hitl',
     default_args=default_args,
     schedule_interval=None,
     catchup=False,
-    tags=['kx', 'lab4b', 'agent', 'hitl', 'airflow3'],
-    description='Lab 4B: เอเจนต์ตัดสินใจค้นหาข้อมูล (@task.agent) พร้อมระบบตรวจสอบอนุมัติโดยมนุษย์ (HITL)'
+    tags=['kx', 'lab4', 'multiagent', 'hitl', 'airflow3'],
+    description='Lab 4: การทำงานร่วมกันแบบ Multi-Agent (HR/IT Router) และตรวจสอบผลลัพธ์ผ่าน HITL'
 ) as dag:
 
-    # 1. รับข้อคำถามจากผู้ใช้ผ่านพารามิเตอร์ของ DAG (DAG Run Configuration)
+    # 1. รับข้อคำถามจากผู้ใช้
     @task
     def receive_user_query(**context):
-        # ดึงข้อความคำถามจาก conf ที่ส่งมาตอนทริกเกอร์ DAG
-        # ตัวอย่าง: {"query": "ฉันเบิกค่ารักษาพยาบาลได้กี่บาทต่อปี?"}
-        dag_run_conf = context.get('dag_run').conf
-        query = dag_run_conf.get('query', "ฉันเบิกค่ารักษาพยาบาลได้กี่บาทต่อปี?")
+        dag_run_conf = context.get('dag_run').conf or {}
+        # คำถามจำลองเริ่มต้นเกี่ยวกับ IT Support
+        query = dag_run_conf.get('query', "รหัสผ่านไอทีต้องตั้งอย่างน้อยกี่ตัวอักษร และเคลมคอมพิวเตอร์ใหม่ได้เมื่อไร?")
         return query
 
-    # 2. ทำงานร่วมกับ `@task.agent` (ฟีเจอร์ Airflow 3) ในการคิดวิเคราะห์และค้นหาข้อมูลเวกเตอร์
-    # ระบบจะมอบหมายเครื่องมือค้นหาข้อมูล (search_vector_db_tool) ให้ Agent เรียกใช้ได้อิสระ
+    # 2. วิเคราะห์จำแนกหมวดหมู่ด้วย LLM (Router) เพื่อเลือกสายงาน
+    @task
+    def route_query_classification(query: str):
+        gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
+        genai.configure(api_key=gemini_api_key)
+        
+        prompt = f"""วิเคราะห์คำถามพนักงานต่อไปนี้: "{query}"
+ประเภทคำถามแบ่งออกเป็นสองฝ่าย:
+- HR: เกี่ยวกับวันลาพักร้อน, นโยบายการลาทำงาน WFH/Hybrid, ค่าเบิกเคลมรักษาพยาบาล, dental care, งบการเรียนรู้
+- IT: เกี่ยวกับเครื่องคอมพิวเตอร์ laptop, การลงลิขสิทธิ์ซอฟต์แวร์, นโยบายรหัสผ่าน Password complexity, ความปลอดภัยเน็ตเวิร์ก VPN, ปัญหาเทคนิค IT support
+
+ให้ตอบกลับด้วยคำภาษาอังกฤษเพียงคำเดียวเท่านั้นว่า 'HR' หรือ 'IT' ห้ามอธิบายเหตุผล"""
+
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(prompt)
+        classification = response.text.strip().upper()
+        print(f"ผลการจำแนกประเภทโดยโมเดล: {classification}")
+        return classification
+
+    # 3. แตกแขนงงาน (Branch Task)
+    @task.branch
+    def branching_decision_task(classification: str):
+        if "IT" in classification:
+            return "it_specialist_agent"
+        else:
+            return "hr_specialist_agent"
+
+    # 4. HR Expert Agent Task (เอเจนต์เฉพาะทาง HR)
     @task.agent(
         llm_conn_id="gemini_conn",
-        toolsets=[search_vector_db_tool],
-        system_prompt="คุณเป็น Agent วิเคราะห์คำตอบสำหรับ HR ให้ใช้เครื่องมือในการสืบค้นข้อมูลเวกเตอร์ และสรุปคำตอบให้พนักงานอย่างถูกต้อง"
+        toolsets=[search_hr_db_tool],
+        system_prompt="คุณเป็นเอเจนต์ผู้เชี่ยวชาญด้านกฎระเบียบ HR ให้ใช้เครื่องมือสืบค้นข้อมูล HR และสรุปคำตอบให้ชัดเจนอิงตามแหล่งข้อมูลเท่านั้น"
     )
-    def ai_agent_reasoning(user_query: str):
-        # ฟังก์ชัน `@task.agent` จะทำหน้าที่รับค่าคำถามแล้วส่งต่อให้ Gemini
-        # พร้อมทั้งรัน Loop ในการเรียกใช้เครื่องมือภายนอกแบบอัตโนมัติจนเสร็จสิ้น
-        return user_query
+    def hr_specialist_agent(query: str):
+        return query
 
-    # 3. ขั้นตอน Human-in-the-Loop (HITL) เพื่อหยุดพัก DAG รอให้มนุษย์ตรวจสอบคำตอบที่เอเจนต์คิดมา
-    # ใน Airflow 3.3+ ฟังก์ชันนี้จะเปลี่ยนสถานะ Task เป็น `awaiting_input` ซึ่งไม่กินแรมหรือ CPU ในการรอคอย
+    # 5. IT Expert Agent Task (เอเจนต์เฉพาะทาง IT)
+    @task.agent(
+        llm_conn_id="gemini_conn",
+        toolsets=[search_it_db_tool],
+        system_prompt="คุณเป็นเอเจนต์ผู้เชี่ยวชาญด้านระบบ IT Support และความปลอดภัย ให้ใช้เครื่องมือสืบค้นข้อมูล IT และสรุปคู่มือตอบกลับพนักงานให้ชัดเจนและปลอดภัย"
+    )
+    def it_specialist_agent(query: str):
+        return query
+
+    # 6. รวบรวมคำตอบจากเอเจนต์ย่อยที่ถูกเลือก (Collector Task)
+    @task(trigger_rule="one_success")
+    def collect_agent_response(hr_resp=None, it_resp=None):
+        # ดึงคำตอบจากตัวแปรที่รันสำเร็จ
+        final_resp = hr_resp or it_resp
+        return final_resp
+
+    # 7. คอยหยุดเพื่อทวนสอบความถูกต้องโดยผู้ดูแลระบบ (Human-in-the-Loop)
     wait_for_human_review = HITLOperator(
         task_id='wait_for_human_review',
-        message="กรุณาตรวจสอบและอนุมัติคำตอบที่วิเคราะห์โดย AI Agent ด้านล่างนี้",
-        # ค่าที่จะนำไปแสดงผลบนแบบฟอร์มตรวจสอบบนหน้า UI
+        message="กรุณาตรวจสอบเนื้อหาและอนุมัติคำตอบที่วิเคราะห์โดย Multi-Agent ระบบด้านล่างนี้",
         context_data={
-            "agent_response": "{{ task_instance.xcom_pull(task_ids='ai_agent_reasoning') }}",
+            "agent_response": "{{ task_instance.xcom_pull(task_ids='collect_agent_response') }}",
             "original_query": "{{ task_instance.xcom_pull(task_ids='receive_user_query') }}"
         }
     )
 
-    # 4. บันทึกคำตอบสุดท้ายที่ผ่านการยืนยันแล้วลงในไฟล์ระบบ
+    # 8. บันทึกคำตอบลงในเครื่องเซิร์ฟเวอร์หลัก
     @task
     def save_final_response(approved_content: str, query: str):
         output_file = "/opt/airflow/data/final_responses.txt"
-        
-        # ดึงข้อมูลการอนุมัติ (Approved/Rejected) จากข้อมูล XCom ของ HITL
-        # เพื่อดูข้อคิดเห็นเพิ่มเติมที่มนุษย์เขียนส่งกลับมา
         log_entry = f"--- [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ---\n"
         log_entry += f"คำถาม: {query}\n"
-        log_entry += f"คำตอบที่อนุมัติ: {approved_content}\n\n"
+        log_entry += f"คำตอบที่ผ่านการอนุมัติ: {approved_content}\n\n"
         
         with open(output_file, "a", encoding="utf-8") as f:
             f.write(log_entry)
-        
-        return "สำเร็จ: จัดเก็บคำตอบที่ผ่านการทวนสอบโดยมนุษย์เรียบร้อยแล้ว"
+        return "สำเร็จ: ข้อมูลคำตอบได้ผ่านการทวนสอบและจัดเก็บเรียบร้อยแล้ว"
 
-    # กำหนดเส้นทางการไหลของข้อมูล
-    query_task = receive_user_query()
-    agent_task = ai_agent_reasoning(query_task)
+    # การโยงลำดับการไหลของข้อมูลความสัมพันธ์
+    query_val = receive_user_query()
+    class_val = route_query_classification(query_val)
+    branch_val = branching_decision_task(class_val)
     
-    # ดึงผลลัพธ์คำตอบเพื่อส่งต่อ
-    save_task = save_final_response(agent_task, query_task)
+    # กำหนดเส้นทางแบบแตกแขนง
+    hr_val = hr_specialist_agent(query_val)
+    it_val = it_specialist_agent(query_val)
+    
+    # รวบรวมผลลัพธ์
+    collector_val = collect_agent_response(hr_val, it_val)
+    save_val = save_final_response(collector_val, query_val)
 
-    # กำหนดลำดับงาน:
-    # 1. รับคำถาม -> 2. เอเจนต์วิเคราะห์ -> 3. หยุดรอคนอนุมัติ -> 4. บันทึกผลลัพธ์ลงระบบหลัก
-    query_task >> agent_task >> wait_for_human_review >> save_task
+    # กำหนดลำดับงานเชิงกราฟ (Graph Dependencies)
+    query_val >> class_val >> branch_val
+    branch_val >> hr_specialist_agent >> collector_val
+    branch_val >> it_specialist_agent >> collector_val
+    collector_val >> wait_for_human_review >> save_val

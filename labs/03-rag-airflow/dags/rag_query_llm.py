@@ -21,23 +21,32 @@ with DAG(
     schedule_interval=None,
     catchup=False,
     tags=['kx', 'lab3', 'query', 'llm', 'airflow3'],
-    description='Lab 3: สอบถามข้อมูล RAG และตอบกลับผ่านโมเดล Gemini โดยใช้ @task.llm'
+    description='Lab 3: สอบถามข้อมูล RAG (HR/IT) แยกถัง และตอบกลับผ่านโมเดล Gemini โดยใช้ @task.llm'
 ) as dag:
 
-    # 1. รับข้อคำถามจากผู้ใช้ผ่านพารามิเตอร์ของ DAG (DAG Run Configuration)
+    # 1. รับข้อคำถามและขอบเขตโดเมน (HR หรือ IT) จากผู้ใช้ผ่านพารามิเตอร์ของ DAG
     @task
-    def receive_query(**context):
-        dag_run_conf = context.get('dag_run').conf
-        # ค่าตั้งต้นจะถามหาเรื่องวันลาพักร้อน
+    def receive_query_and_domain(**context):
+        dag_run_conf = context.get('dag_run').conf or {}
         query = dag_run_conf.get('query', "ฉันมีสิทธิ์ได้รับวันลาพักร้อนปีละกี่วันทำการ?")
-        return query
+        domain = dag_run_conf.get('domain', "hr")  # กำหนดค่าเริ่มต้นเป็น hr (สามารถส่ง 'it' มาได้)
+        return {"query": query, "domain": domain}
 
-    # 2. ค้นหาเอกสารอ้างอิงจากคลังข้อมูลเวกเตอร์ ChromaDB
+    # 2. ค้นหาเอกสารอ้างอิงจากคลังข้อมูลเวกเตอร์ ChromaDB ตามขอบเขตโดเมน
     @task
-    def retrieve_context(query: str):
+    def retrieve_context(params: dict):
+        query = params["query"]
+        domain = params["domain"].lower().strip()
+        
+        # เลือกคอลเลกชันตามโดเมน
+        if domain == "it":
+            collection_name = "kx_it_documents"
+        else:
+            collection_name = "kx_hr_documents"
+            
         try:
             chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
-            collection = chroma_client.get_collection(name="kx_airflow_documents")
+            collection = chroma_client.get_collection(name=collection_name)
             
             gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
             genai.configure(api_key=gemini_api_key)
@@ -55,19 +64,21 @@ with DAG(
                 n_results=2
             )
             contexts = results['documents'][0]
-            return "\n---\n".join(contexts)
+            return {"context": "\n---\n".join(contexts), "query": query, "domain": domain}
         except Exception as e:
-            return f"ไม่มีข้อมูลในฐานข้อมูลเวกเตอร์ หรือเกิดข้อผิดพลาด: {str(e)}"
+            return {"context": f"ไม่มีข้อมูลในฐานข้อมูลเวกเตอร์ของถัง {domain} หรือเกิดข้อผิดพลาด: {str(e)}", "query": query, "domain": domain}
 
     # 3. ตอบกลับข้อมูลสรุปผ่านฟีเจอร์ระดับสูง @task.llm (Airflow 3)
     @task.llm(llm_conn_id="gemini_conn")
-    def generate_response_with_llm(context_data: str, query: str, system_prompt: str = "คุณเป็นเจ้าหน้าที่ HR ตอบคำถามพนักงานอย่างสุภาพโดยยึดตามข้อมูลอ้างอิงเท่านั้น"):
-        # ใน Airflow 3 ฟังก์ชันที่มีการตกแต่งด้วย @task.llm จะดึงสิทธิ์ Connection gemini_conn
-        # มาเรียกประมวลผลคำตอบจาก Gemini API โดยอัตโนมัติ
-        user_prompt = f"เอกสารอ้างอิงสวัสดิการพนักงาน:\n{context_data}\n\nคำถามจากพนักงาน: {query}"
+    def generate_response_with_llm(data: dict, system_prompt: str = "คุณเป็นเจ้าหน้าที่บริการตอบคำถามพนักงานอย่างสุภาพโดยยึดตามข้อมูลอ้างอิงเท่านั้น"):
+        context_data = data["context"]
+        query = data["query"]
+        domain = data["domain"].upper()
+        
+        user_prompt = f"ขอบเขตข้อมูลวิเคราะห์: แผนก {domain}\nเอกสารอ้างอิง:\n{context_data}\n\nคำถามจากพนักงาน: {query}"
         return f"{system_prompt}. Prompt: {user_prompt}"
 
     # ลำดับโฟลว์งาน
-    query_val = receive_query()
-    context_val = retrieve_context(query_val)
-    response_val = generate_response_with_llm(context_val, query_val)
+    params_val = receive_query_and_domain()
+    context_data_val = retrieve_context(params_val)
+    response_val = generate_response_with_llm(context_data_val)
