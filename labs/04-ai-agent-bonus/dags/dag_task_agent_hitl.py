@@ -74,24 +74,16 @@ with DAG(
         query = dag_run_conf.get('query', "รหัสผ่านไอทีต้องตั้งอย่างน้อยกี่ตัวอักษร และเคลมคอมพิวเตอร์ใหม่ได้เมื่อไร?")
         return query
 
-    # 2. วิเคราะห์จำแนกหมวดหมู่ด้วย LLM (Router) เพื่อเลือกสายงาน
-    @task
-    def route_query_classification(query: str):
-        gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
-        genai.configure(api_key=gemini_api_key)
-        
+    # 2. วิเคราะห์จำแนกหมวดหมู่ด้วย LLM (Router) เพื่อเลือกสายงาน (ใช้ @task.llm ในการจำแนกสิทธิ)
+    @task.llm(llm_conn_id="gemini_conn")
+    def route_query_classification(query: str, system_prompt: str = "คุณเป็น Router จำแนกประเภทคำถามพนักงาน"):
         prompt = f"""วิเคราะห์คำถามพนักงานต่อไปนี้: "{query}"
 ประเภทคำถามแบ่งออกเป็นสองฝ่าย:
 - HR: เกี่ยวกับวันลาพักร้อน, นโยบายการลาทำงาน WFH/Hybrid, ค่าเบิกเคลมรักษาพยาบาล, dental care, งบการเรียนรู้
 - IT: เกี่ยวกับเครื่องคอมพิวเตอร์ laptop, การลงลิขสิทธิ์ซอฟต์แวร์, นโยบายรหัสผ่าน Password complexity, ความปลอดภัยเน็ตเวิร์ก VPN, ปัญหาเทคนิค IT support
 
 ให้ตอบกลับด้วยคำภาษาอังกฤษเพียงคำเดียวเท่านั้นว่า 'HR' หรือ 'IT' ห้ามอธิบายเหตุผล"""
-
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        response = model.generate_content(prompt)
-        classification = response.text.strip().upper()
-        print(f"ผลการจำแนกประเภทโดยโมเดล: {classification}")
-        return classification
+        return f"{system_prompt}. Prompt: {prompt}"
 
     # 3. แตกแขนงงาน (Branch Task)
     @task.branch
