@@ -90,6 +90,7 @@ services:
             --role Admin \
             --email admin@example.com \
             --password admin
+        airflow connections add fs_default --conn-type fs || true
     restart: on-failure
 
 volumes:
