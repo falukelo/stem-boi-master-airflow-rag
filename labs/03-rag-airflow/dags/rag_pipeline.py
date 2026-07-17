@@ -31,7 +31,7 @@ with DAG(
 
     wait_for_file = FileSensor(
         task_id='wait_for_hr_document',
-        filepath='hr_policy.pdf',  # คอยตรวจจับไฟล์ชื่อ hr_policy.pdf
+        filepath=os.path.join(DATA_DIR, 'hr_policy.pdf'),  # คอยตรวจจับไฟล์ชื่อ hr_policy.pdf ในโฟลเดอร์ data
         fs_conn_id='fs_default',
         poke_interval=15,
         timeout=600,
