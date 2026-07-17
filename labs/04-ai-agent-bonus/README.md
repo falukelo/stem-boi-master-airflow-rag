@@ -37,13 +37,32 @@ graph TD
 
 ## 3. ขั้นตอนการทดสอบรันแล็บ
 
-*ตรวจสอบให้แน่ใจว่าได้คัดลอก DAG ไปไว้ที่โฟลเดอร์รันหลักแล้ว: `cp labs/04-ai-agent-bonus/dags/dag_task_agent_hitl.py labs/03-rag-airflow/dags/`*
+*ตรวจสอบให้แน่ใจว่าคุณได้กรอก `GEMINI_API_KEY` ในไฟล์ `.env` ของ Lab 3 เรียบร้อยแล้ว*
 
-### ขั้นตอนที่ 1: เตรียมเวกเตอร์แยกถังก่อน (จาก Lab 3)
+### ขั้นตอนที่ 1: คัดลอกไฟล์ DAG ไปยังห้องเครื่องหลัก
+รันคำสั่งย้ายสคริปต์ตัวอย่างไปยังโฟลเดอร์ปฏิบัติการหลักตามระบบปฏิบัติการของคุณ:
+*   **macOS / Linux (Terminal)**:
+    ```bash
+    cp labs/04-ai-agent-bonus/dags/dag_task_agent_hitl.py labs/03-rag-airflow/dags/
+    ```
+*   **Windows (Command Prompt / CMD)**:
+    ```cmd
+    copy labs\04-ai-agent-bonus\dags\dag_task_agent_hitl.py labs\03-rag-airflow\dags\
+    ```
+*   **Windows (PowerShell)**:
+    ```powershell
+    Copy-Item labs\04-ai-agent-bonus\dags\dag_task_agent_hitl.py labs\03-rag-airflow\dags\
+    ```
+
+---
+
+### ขั้นตอนที่ 2: เตรียมเวกเตอร์แยกถังก่อน (จาก Lab 3)
 1. ป้อนไฟล์ `hr_policy.pdf` (ก๊อปปี้จาก `policy_leave.pdf` หรือไฟล์ HR อื่นๆ) นำมาหย่อนในโฟลเดอร์รันของ Airflow แล้วรัน DAG `lab03_hr_ingestion` เพื่อนำเข้าเวกเตอร์ถัง HR
 2. ป้อนไฟล์ `it_policy.pdf` (ก๊อปปี้จาก `policy_itsupport.pdf`) นำมาหย่อน แล้วรัน DAG `lab03_it_ingestion` เพื่อนำเข้าเวกเตอร์ถัง IT
 
-### ขั้นตอนที่ 2: สั่งรันบอร์ดทดสอบจำลอง (Multi-Agent Running)
+---
+
+### ขั้นตอนที่ 3: สั่งรันบอร์ดทดสอบจำลอง (Multi-Agent Running)
 1. เปิดสวิตช์รัน DAG `lab04_multi_agent_hitl` ใน Airflow UI
 2. สั่งรันแบบกำหนดค่า **Trigger DAG w/ config** โดยจำลองป้อนคำถามเป็น JSON:
 
@@ -61,9 +80,11 @@ graph TD
   "query": "สวัสดิการเบิกค่ารักษาพยาบาลวงเงินกี่บาทต่อปี?"
 }
 ```
-*   **ผลการทำงาน**: ตัววิเคราะห์จะประเมินและจำแนกว่าเป็น "HR" และแตกสายงานรันเฉพาะ Task `hr_specialist_agent`
+*   **ผลการทำงาน**: ตัววิเคราะห์จะประเมินและจำแนกว่าเป็น "HR" และแตกกิ่งไปรันเฉพาะ Task `hr_specialist_agent`
 
-### ขั้นตอนที่ 3: ตรวจทานคำตอบ (HITL Stage)
+---
+
+### ขั้นตอนที่ 4: ตรวจทานคำตอบ (HITL Stage)
 1. เมื่อ Task ใดทำสำเร็จ โฟลว์จะหยุดรออนุมัติที่ Task `wait_for_human_review` (สถานะ `awaiting_input`)
 2. กดคลิกที่ Task `wait_for_human_review` -> เลือกแถบ **HITL / Approval Request**
 3. ตรวจทานว่าเอเจนต์ที่เกี่ยวข้องนำคำตอบจากถังเวกเตอร์ที่ถูกต้องมาตอบใช่หรือไม่ จากนั้นกด **Approve** เพื่อสั่งตอบกลับสมบูรณ์แบบ

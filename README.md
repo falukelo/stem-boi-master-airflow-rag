@@ -57,25 +57,71 @@ boi-master-airflow-rag/
 │   │   │   └── dag_task_agent_hitl.py # DAG เอเจนต์ตัดสินใจสืบค้นอัตโนมัติแยกถังร่วมกับ HITL
 │   │   └── README.md
 │   └── 05-mlops-dataops/             # เอกสารทบทวนการมอนิเตอร์และดูแลท่อส่งในโปรดักชัน
+├── .env.example                      # ไฟล์ต้นแบบการเก็บคีย์สภาพแวดล้อม
 └── รายละเอียดหลักสูตร KX_ Mastering Workflow .pdf   # รายละเอียดสเกดดูลหลักสูตรต้นฉบับ
 ```
 
 ---
 
-## 4. วิธีการใช้งานคลังข้อมูลจำลอง (Getting Started)
+## 4. วิธีการใช้งานคลังข้อมูลและเริ่มทำแล็บ (Getting Started)
 
 ### ความต้องการของระบบ (Prerequisites)
-1.  **Docker & Docker Compose**: สำหรับสั่งเปิดสภาพแวดล้อมจำลอง Jupyter และ Airflow 3
-2.  **Google AI Studio API Key**: ลงทะเบียนขอรับ API Key ฟรีเพื่อเปิดสิทธิ์คุยกับ Gemini และแปลงเวกเตอร์ความรู้
+1.  **Docker & Docker Compose**: จำเป็นสำหรับการรันสภาพแวดล้อม Jupyter และ Airflow 3
+2.  **Google AI Studio API Key**: สำหรับแปลงเวกเตอร์ความรู้และสรุปคำตอบโดยโมเดล Gemini
 
-### การเตรียมคีย์ใน Terminal ของคุณ
-ก่อนเริ่มทำแล็บ ให้พิมพ์คำสั่งส่งออกคีย์ในหน้าต่างคำสั่ง:
-```bash
-export GEMINI_API_KEY="your-actual-api-key-here"
-```
+---
 
-### การตั้งค่าสิทธิ์ผู้เขียนสำหรับ Docker (macOS/Linux)
-สำหรับรันในระบบปฏิบัติการ Linux/macOS ให้พิมพ์คำสั่งสร้างสิทธิ์เพื่อให้คอนเทนเนอร์สามารถเขียนไฟล์ลงในเครื่องโฮสต์ของคุณได้สำเร็จ:
-```bash
-echo -e "AIRFLOW_UID=$(id -u)" > labs/03-rag-airflow/.env
-```
+### ขั้นตอนที่ 1: ตั้งค่าตัวแปรสภาพแวดล้อมผ่านไฟล์ `.env`
+เพื่อป้องกัน API Key รั่วไหลและให้ Docker นำค่าคีย์ไปรันใช้งานได้สำเร็จ:
+
+1. คัดลอกไฟล์ต้นแบบ `.env.example` ไปยังไฟล์จริง `.env` ที่โฟลเดอร์รากของโปรเจกต์ และไปที่โฟลเดอร์แล็บย่อยด้วย:
+   *   **macOS / Linux (Terminal)**:
+       ```bash
+       cp .env.example .env
+       cp .env.example labs/02-rag-architecture/.env
+       cp .env.example labs/03-rag-airflow/.env
+       ```
+   *   **Windows (Command Prompt / CMD)**:
+       ```cmd
+       copy .env.example .env
+       copy .env.example labs\02-rag-architecture\.env
+       copy .env.example labs\03-rag-airflow\.env
+       ```
+   *   **Windows (PowerShell)**:
+       ```powershell
+       Copy-Item .env.example .env
+       Copy-Item .env.example labs\02-rag-architecture\.env
+       Copy-Item .env.example labs\03-rag-airflow\.env
+       ```
+
+2. เปิดไฟล์ `.env` ทั้งหมดที่คุณคัดลอก และป้อนคีย์ API Key ของคุณในบรรทัด:
+   ```text
+   GEMINI_API_KEY="your-actual-api-key-here"
+   ```
+
+3. **สำหรับการตั้งค่าสิทธิ์ผู้เขียนบน Docker (เฉพาะผู้ใช้ macOS / Linux เท่านั้น)**:
+   สั่งคำนวณและเพิ่มค่าสิทธิ์ UID ของผู้ใช้ปัจจุบันลงในไฟล์ `.env` ของ Lab 3 เพื่อไม่ให้ Docker ปิดสิทธิ์การแก้ไขไฟล์โฟลเดอร์ปลายทาง:
+   ```bash
+   echo "AIRFLOW_UID=$(id -u)" >> labs/03-rag-airflow/.env
+   ```
+   *(ผู้ใช้งาน Windows ไม่ต้องตั้งค่า `AIRFLOW_UID` เนื่องจากระบบจะรันสิทธิ์ผ่าน Hyper-V/WSL2 เป็น root ให้ทันที)*
+
+---
+
+### ขั้นตอนที่ 2: เริ่มต้นการทำงานของเซสชันต่าง ๆ
+
+*   **Lab 02 (สถาปัตยกรรม RAG บน Jupyter)**:
+    เข้าไปที่ไดเรกทอรี `labs/02-rag-architecture` แล้วเปิดสคริปต์ Docker:
+    ```bash
+    cd labs/02-rag-architecture
+    docker-compose up -d
+    ```
+    เข้าใช้งานผ่านบราวเซอร์ที่: `http://localhost:8888`
+
+*   **Lab 03 & 04 (ท่อส่งข้อมูล Airflow 3 และ Multi-Agent)**:
+    เข้าไปที่ไดเรกทอรี `labs/03-rag-airflow` แล้วรันคำสั่ง Docker:
+    ```bash
+    cd labs/03-rag-airflow
+    docker-compose up -d
+    ```
+    เข้าใช้งานหน้าจอควบคุมหลัก (UI) ที่: `http://localhost:8080` (Username: `admin` / Password: `admin`)

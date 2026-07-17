@@ -54,3 +54,28 @@ graph TD
 1.  **การเปลี่ยนโครงสร้างเก็บข้อมูลระดับองค์กร (Enterprise Vector DB)**: จาก ChromaDB แบบ Persistent/Ephemeral ในโปรเจกต์ศึกษา ให้เปลี่ยนเป็นฐานข้อมูลเวกเตอร์แบบกระจายศูนย์กลาง เช่น **pgvector (PostgreSQL)**, **Pinecone**, **Qdrant** หรือบริการจัดการสืบค้นความรู้สำเร็จรูปอย่าง **Vertex AI Search** บน Google Cloud Platform (GCP)
 2.  **ขยายระบบ Orchestration สู่คลาวด์ (Cloud-native Orchestration)**: พัฒนาระบบโดยใช้ **Google Cloud Composer** (Managed Airflow) เพื่อประหยัดเวลาการดูแลรักษาระบบฐานข้อมูลและโครงสร้างพื้นฐานของ Airflow
 3.  **ความปลอดภัยข้อมูลส่วนบุคคล (Data Privacy & Security)**: หากประมวลผลเอกสารสำคัญของบริษัท ให้ตรวจสอบข้อกำหนดพระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล (PDPA) ก่อนการส่งข้อมูลออกไปเรียกภายนอก หรือนำระบบคัดกรองข้อมูลส่วนบุคคล (PII Redaction) มาเสริมใน Task ต้นท่อส่งข้อมูล
+
+---
+
+## 4. การล้างข้อมูลและทรัพยากร (Clean up & Shutdown)
+
+เมื่อจบการสัมมนาและต้องการปิดบริการระบบคอนเทนเนอร์ทั้งหมดเพื่อคืนกำลังของหน่วยความจำเครื่อง ให้รันคำสั่งเหล่านี้:
+
+1. นำระบบ Docker-Compose ลงพร้อมทั้งลบข้อมูลเดิมที่ประมวลผลออกทั้งหมด ( Volumes ):
+   *   **macOS / Linux / Windows (คำสั่งเดียวกัน)**:
+       ```bash
+       docker-compose down -v
+       ```
+2. ลบไฟล์ตัวแปรสภาพแวดล้อม `.env` หากต้องการล้างคีย์ส่วนตัวออก:
+   *   **macOS / Linux**:
+       ```bash
+       rm .env
+       ```
+   *   **Windows (CMD)**:
+       ```cmd
+       del .env
+       ```
+   *   **Windows (PowerShell)**:
+       ```powershell
+       Remove-Item .env
+       ```
