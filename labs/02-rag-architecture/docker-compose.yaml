@@ -9,12 +9,8 @@ services:
     environment:
       - JUPYTER_ENABLE_LAB=yes
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-    command: >
-      start-notebook.sh 
-      --NotebookApp.token='' 
-      --NotebookApp.password=''
     user: root
     entrypoint: []
-    # Auto install required packages on start
+    # Auto install required packages on start and run jupyter lab
     command: >
       bash -c "pip install google-generativeai chromadb langchain-text-splitters PyMuPDF && start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''"
