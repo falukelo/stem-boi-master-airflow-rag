@@ -66,6 +66,12 @@ services:
     command: triggerer
     restart: always
 
+  airflow-dag-processor:
+    <<: *airflow-common
+    container_name: airflow_dag_processor
+    command: dag-processor
+    restart: always
+
   airflow-init:
     <<: *airflow-common
     container_name: airflow_init
