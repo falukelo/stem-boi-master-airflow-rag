@@ -5,3 +5,6 @@ __pycache__/
 logs/
 data/processed/
 *.log
+.env
+outputs/
+slides/
