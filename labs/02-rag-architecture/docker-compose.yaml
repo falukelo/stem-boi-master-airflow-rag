@@ -1,6 +1,6 @@
 services:
   jupyter:
-    image: jupyter/base-notebook:python-3.11.9
+    image: jupyter/base-notebook:latest
     container_name: jupyter_rag_container
     ports:
       - "8888:8888"
