@@ -75,7 +75,7 @@ with DAG(
         return query
 
     # 2. วิเคราะห์และแตกแขนงงานแบบมีเงื่อนไขในขั้นตอนเดียวด้วย @task.llm_branch (Airflow 3 ฟีเจอร์)
-    @task.llm_branch(llm_conn_id="gemini_conn", model="gemini-1.5-flash")
+    @task.llm_branch(llm_conn_id="gemini_conn")
     def route_query_classification(query: str, system_prompt: str = "คุณเป็น LLM Router ตรวจวิเคราะห์และส่งต่อคำถามพนักงาน"):
         prompt = f"""วิเคราะห์คำถามพนักงานต่อไปนี้: "{query}"
 ประเภทคำถามแบ่งออกเป็นสองฝ่าย:
@@ -88,7 +88,6 @@ with DAG(
     # 4. HR Expert Agent Task (เอเจนต์เฉพาะทาง HR)
     @task.agent(
         llm_conn_id="gemini_conn",
-        model="gemini-1.5-flash",
         toolsets=[search_hr_db_tool],
         system_prompt="คุณเป็นเอเจนต์ผู้เชี่ยวชาญด้านกฎระเบียบ HR ให้ใช้เครื่องมือสืบค้นข้อมูล HR และสรุปคำตอบให้ชัดเจนอิงตามแหล่งข้อมูลเท่านั้น"
     )
@@ -98,7 +97,6 @@ with DAG(
     # 5. IT Expert Agent Task (เอเจนต์เฉพาะทาง IT)
     @task.agent(
         llm_conn_id="gemini_conn",
-        model="gemini-1.5-flash",
         toolsets=[search_it_db_tool],
         system_prompt="คุณเป็นเอเจนต์ผู้เชี่ยวชาญด้านระบบ IT Support และความปลอดภัย ให้ใช้เครื่องมือสืบค้นข้อมูล IT และสรุปคู่มือตอบกลับพนักงานให้ชัดเจนและปลอดภัย"
     )
