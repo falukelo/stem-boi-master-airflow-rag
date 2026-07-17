@@ -69,7 +69,7 @@ with DAG(
             return {"context": f"ไม่มีข้อมูลในฐานข้อมูลเวกเตอร์ของถัง {domain} หรือเกิดข้อผิดพลาด: {str(e)}", "query": query, "domain": domain}
 
     # 3. ตอบกลับข้อมูลสรุปผ่านฟีเจอร์ระดับสูง @task.llm (Airflow 3)
-    @task.llm(llm_conn_id="gemini_conn")
+    @task.llm(llm_conn_id="gemini_conn", model="gemini-1.5-flash")
     def generate_response_with_llm(data: dict, system_prompt: str = "คุณเป็นเจ้าหน้าที่บริการตอบคำถามพนักงานอย่างสุภาพโดยยึดตามข้อมูลอ้างอิงเท่านั้น"):
         context_data = data["context"]
         query = data["query"]
