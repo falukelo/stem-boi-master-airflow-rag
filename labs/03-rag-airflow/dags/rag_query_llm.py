@@ -9,7 +9,7 @@ import chromadb
 CHROMA_DB_PATH = "/opt/airflow/data/chromadb"
 
 default_args = {
-    'owner': 'Astra',
+    'owner': 'KX',
     'start_date': datetime(2026, 6, 1),
     'retries': 2,
     'retry_delay': timedelta(seconds=15),
@@ -53,8 +53,8 @@ with DAG(
             
             # แปลงคำถามเป็นเวกเตอร์
             query_vector = genai.embed_content(
-                model="models/text-embedding-004",
-                contents=query,
+                model="models/gemini-embedding-2",
+                content=query,
                 task_type="retrieval_query"
             )['embedding']
             

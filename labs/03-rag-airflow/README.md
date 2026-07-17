@@ -2,15 +2,15 @@
 
 ห้องปฏิบัติการนี้มุ่งเน้นการจัดการสถาปัตยกรรมข้อมูลระดับโปรดักชัน โดยเรียนรู้วิธีการแบ่งแยกถังเก็บข้อมูลความรู้ (Vector Storage Buckets) ออกจากกันตามความรับผิดชอบของหน่วยงาน (HR และ IT Support) เพื่อให้ง่ายต่อการขยายระบบและความปลอดภัยข้อมูล โดยแบ่งออกเป็น **3 DAGs** ในระบบ:
 
-1.  **`lab03_hr_ingestion`** (ท่อข้อมูล HR): ตรวจจับไฟล์ `hr_policy.pdf` นำเข้าถังเวกเตอร์ `kx_hr_documents`
-2.  **`lab03_it_ingestion`** (ท่อข้อมูล IT): ตรวจจับไฟล์ `it_policy.pdf` นำเข้าถังเวกเตอร์ `kx_it_documents`
+1.  **`lab03_hr_ingestion`** (ท่อข้อมูล HR): ตรวจจับไฟล์ PDF ใด ๆ ในโฟลเดอร์ `data/hr/` นำเข้าถังเวกเตอร์ `kx_hr_documents`
+2.  **`lab03_it_ingestion`** (ท่อข้อมูล IT): ตรวจจับไฟล์ PDF ใด ๆ ในโฟลเดอร์ `data/it/` นำเข้าถังเวกเตอร์ `kx_it_documents`
 3.  **`lab03_rag_query_llm`** (ท่อเรียกสอบถาม): รับคำถามพนักงาน ระบุหมวดหมู่การดึงข้อมูล และเรียกใช้ `@task.llm` สรุปคำตอบ
 
 ---
 
 ## 1. การแบ่งโมดูลระดับ Task ในระบบนำเข้าข้อมูล
 แต่ละ DAG ของการนำเข้าข้อมูล (HR และ IT) จะถูกแยกโมดูลออกเป็น 5 Tasks ย่อยเพื่อรองรับการทำงานแบบวิศวกรรมข้อมูลที่ดี:
-*   **`wait_for_document`** (FileSensor): คอยตรวจจับไฟล์ชื่อตามที่ฝ่ายกำหนดในคลัง
+*   **`wait_for_document`** (FileSensor): คอยตรวจจับไฟล์ `.pdf` ใด ๆ ที่วางในโฟลเดอร์ของฝ่าย (`data/hr/` หรือ `data/it/`)
 *   **`read_pdf_task`**: เปิดสกัดข้อความจาก PDF ดิบด้วย PyMuPDF (`fitz`)
 *   **`chunk_text_task`**: แบ่งข้อความเป็นชิ้นย่อยขนาด 250 ตัวอักษร
 *   **`embed_text_task`**: แปลงชิ้นข้อความเป็นเวกเตอร์ผ่าน Gemini API (`text-embedding-004`)
@@ -71,9 +71,12 @@
 1. เข้าไปที่ Airflow UI -> เมนู **Admin -> Connections**
 2. กดปุ่ม **+** สร้าง Record ใหม่:
    *   **Connection Id**: `gemini_conn`
-   *   **Connection Type**: Generic หรือ HTTP
-   *   **Password/API Key**: ระบุ `GEMINI_API_KEY` ของคุณ
+   *   **Connection Type**: `Pydantic AI` (ต้องเลือกตัวนี้เท่านั้น ตัว `@task.llm` / `@task.agent` / `@task.llm_branch` ถึงจะทำงานได้ และช่อง **Model** จะปรากฏขึ้นหลังเลือก Type นี้)
+   *   **Model**: `google:gemini-3.1-flash-lite` (รูปแบบ `provider:model`)
+   *   **Password**: ระบุ `GEMINI_API_KEY` ของคุณ
 3. กด **Save**
+
+> หมายเหตุ: Connection Type `Pydantic AI` มาจาก provider `apache-airflow-providers-common-ai` (ติดตั้งไว้แล้วผ่าน `_PIP_ADDITIONAL_REQUIREMENTS` ใน `docker-compose.yaml`) โมเดล LLM ระบุที่ช่อง Model ของ connection ไม่ใช่ในโค้ด DAG ส่วนโมเดล embedding (`gemini-embedding-2`) ถูกเรียกผ่าน SDK โดยตรงด้วย `GEMINI_API_KEY` แยกจาก connection นี้
 
 ---
 
@@ -81,18 +84,18 @@
 
 ### ขั้นตอนที่ 3.1: รันท่อนำเข้าข้อมูลฝ่าย HR (HR Ingestion Phase)
 1. เปิดสวิตช์เริ่มการทำงาน DAG ชื่อ `lab03_hr_ingestion`
-2. คัดลอกไฟล์เอกสารนโยบายในเครื่องของคุณ เช่น `labs/mock_documents/policy_leave.pdf` ไปวางในโฟลเดอร์หลักสูตร `./data/` และเปลี่ยนชื่อไฟล์ปลายทางเป็น `hr_policy.pdf`
-   *   **macOS / Linux**: `cp ../mock_documents/policy_leave.pdf ./data/hr_policy.pdf`
-   *   **Windows (CMD)**: `copy ..\mock_documents\policy_leave.pdf .\data\hr_policy.pdf`
-   *   **Windows (PowerShell)**: `Copy-Item ..\mock_documents\policy_leave.pdf .\data\hr_policy.pdf`
+2. คัดลอกไฟล์เอกสารนโยบาย HR เช่น `labs/mock_documents/policy_leave.pdf` ไปวางในโฟลเดอร์ `./data/hr/` (ใช้ชื่อไฟล์เดิมได้เลย ไม่ต้องเปลี่ยนชื่อ — ตัว Sensor จะดักจับไฟล์ `.pdf` ใด ๆ ที่วางในโฟลเดอร์นี้)
+   *   **macOS / Linux**: `cp ../mock_documents/policy_leave.pdf ./data/hr/`
+   *   **Windows (CMD)**: `copy ..\mock_documents\policy_leave.pdf .\data\hr\`
+   *   **Windows (PowerShell)**: `Copy-Item ..\mock_documents\policy_leave.pdf .\data\hr\`
 3. สังเกตหน้าจอ Airflow: ตัว Sensor จะเริ่มรันผ่าน และนำเข้าข้อมูลเวกเตอร์สู่ถัง `kx_hr_documents` จนเสร็จสิ้น
 
 ### ขั้นตอนที่ 3.2: รันท่อนำเข้าข้อมูลฝ่าย IT Support (IT Ingestion Phase)
 1. เปิดสวิตช์เริ่มการทำงาน DAG ชื่อ `lab03_it_ingestion`
-2. คัดลอกไฟล์เอกสารนโยบายไอทีจำลอง `labs/mock_documents/policy_itsupport.pdf` ไปวางในโฟลเดอร์หลักสูตร `./data/` และเปลี่ยนชื่อไฟล์ปลายทางเป็น `it_policy.pdf`
-   *   **macOS / Linux**: `cp ../mock_documents/policy_itsupport.pdf ./data/it_policy.pdf`
-   *   **Windows (CMD)**: `copy ..\mock_documents\policy_itsupport.pdf .\data\it_policy.pdf`
-   *   **Windows (PowerShell)**: `Copy-Item ..\mock_documents\policy_itsupport.pdf .\data\it_policy.pdf`
+2. คัดลอกไฟล์เอกสารนโยบายไอทีจำลอง `labs/mock_documents/policy_itsupport.pdf` ไปวางในโฟลเดอร์ `./data/it/` (ใช้ชื่อไฟล์เดิมได้เลย ไม่ต้องเปลี่ยนชื่อ — ตัว Sensor จะดักจับไฟล์ `.pdf` ใด ๆ ที่วางในโฟลเดอร์นี้)
+   *   **macOS / Linux**: `cp ../mock_documents/policy_itsupport.pdf ./data/it/`
+   *   **Windows (CMD)**: `copy ..\mock_documents\policy_itsupport.pdf .\data\it\`
+   *   **Windows (PowerShell)**: `Copy-Item ..\mock_documents\policy_itsupport.pdf .\data\it\`
 3. สังเกตตัว Sensor จะตรวจพบไฟล์และประมวลผลนำเข้าเวกเตอร์สู่ถัง `kx_it_documents` จนแสดงผลสำเร็จเป็นสีเขียว
 
 ### ขั้นตอนที่ 3.3: ทดสอบสอบถาม RAG ค้นหาข้อมูลรายถัง (Query Phase)

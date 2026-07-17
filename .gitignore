@@ -8,3 +8,11 @@ data/processed/
 .env
 outputs/
 slides/
+
+# Lab 03: keep the document drop folders but ignore files students place in them
+labs/03-rag-airflow/data/hr/*
+labs/03-rag-airflow/data/it/*
+!labs/03-rag-airflow/data/hr/.gitkeep
+!labs/03-rag-airflow/data/it/.gitkeep
+labs/03-rag-airflow/data/processed/
+labs/03-rag-airflow/data/chromadb/

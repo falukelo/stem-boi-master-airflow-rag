@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime, timedelta
 import os
+import glob
 import shutil
 from airflow import DAG
 from airflow.decorators import task
@@ -10,6 +11,7 @@ import google.generativeai as genai
 import chromadb
 
 DATA_DIR = "/opt/airflow/data"
+HR_DIR = "/opt/airflow/data/hr"
 PROCESSED_DIR = "/opt/airflow/data/processed"
 CHROMA_DB_PATH = "/opt/airflow/data/chromadb"
 
@@ -31,7 +33,7 @@ with DAG(
 
     wait_for_file = FileSensor(
         task_id='wait_for_hr_document',
-        filepath=os.path.join(DATA_DIR, 'hr_policy.pdf'),  # คอยตรวจจับไฟล์ชื่อ hr_policy.pdf ในโฟลเดอร์ data
+        filepath=os.path.join(HR_DIR, '*.pdf'),  # คอยตรวจจับไฟล์ PDF ใด ๆ ในโฟลเดอร์ data/hr
         fs_conn_id='fs_default',
         poke_interval=15,
         timeout=600,
@@ -41,10 +43,11 @@ with DAG(
     @task
     def read_pdf_task():
         import fitz
-        file_path = os.path.join(DATA_DIR, "hr_policy.pdf")
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"ไม่พบไฟล์ที่ {file_path}")
-            
+        pdf_files = sorted(glob.glob(os.path.join(HR_DIR, "*.pdf")))
+        if not pdf_files:
+            raise FileNotFoundError(f"ไม่พบไฟล์ PDF ใน {HR_DIR}")
+        file_path = pdf_files[0]
+
         doc = fitz.open(file_path)
         document_content = ""
         for page in doc:
@@ -71,8 +74,8 @@ with DAG(
         embedded_data = []
         for i, chunk in enumerate(chunks):
             result = genai.embed_content(
-                model="models/text-embedding-004",
-                contents=chunk,
+                model="models/gemini-embedding-2",
+                content=chunk,
                 task_type="retrieval_document"
             )
             embedded_data.append({
@@ -92,21 +95,24 @@ with DAG(
         except Exception:
             pass
         collection = chroma_client.create_collection(name=collection_name)
-        
+
+        pdf_files = sorted(glob.glob(os.path.join(HR_DIR, "*.pdf")))
+        source_name = os.path.basename(pdf_files[0])
+
         ids = [item["id"] for item in embedded_data]
         embeddings = [item["embedding"] for item in embedded_data]
         documents = [item["chunk"] for item in embedded_data]
-        metadatas = [{"source": "hr_policy.pdf", "chunk_index": i} for i in range(len(embedded_data))]
-        
+        metadatas = [{"source": source_name, "chunk_index": i} for i in range(len(embedded_data))]
+
         collection.add(
             ids=ids,
             embeddings=embeddings,
             documents=documents,
             metadatas=metadatas
         )
-        
+
         # ย้ายไฟล์หลังนำเข้าสำเร็จ
-        file_path = os.path.join(DATA_DIR, "hr_policy.pdf")
+        file_path = pdf_files[0]
         os.makedirs(PROCESSED_DIR, exist_ok=True)
         dest_path = os.path.join(PROCESSED_DIR, f"processed_hr_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf")
         shutil.move(file_path, dest_path)

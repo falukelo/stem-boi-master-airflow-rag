@@ -10,7 +10,7 @@ import chromadb
 CHROMA_DB_PATH = "/opt/airflow/data/chromadb"
 
 default_args = {
-    'owner': 'Forge',
+    'owner': 'KX',
     'start_date': datetime(2026, 6, 1),
     'retries': 2,
     'retry_delay': timedelta(seconds=15),
@@ -27,8 +27,8 @@ def search_hr_db_tool(query: str) -> str:
         gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
         genai.configure(api_key=gemini_api_key)
         query_vector = genai.embed_content(
-            model="models/text-embedding-004",
-            contents=query,
+            model="models/gemini-embedding-2",
+            content=query,
             task_type="retrieval_query"
         )['embedding']
         
@@ -46,11 +46,11 @@ def search_it_db_tool(query: str) -> str:
         gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
         genai.configure(api_key=gemini_api_key)
         query_vector = genai.embed_content(
-            model="models/text-embedding-004",
-            contents=query,
+            model="models/gemini-embedding-2",
+            content=query,
             task_type="retrieval_query"
         )['embedding']
-        
+
         results = collection.query(query_embeddings=[query_vector], n_results=2)
         return "\n---\n".join(results['documents'][0])
     except Exception as e:
