@@ -23,7 +23,7 @@ default_args = {
 with DAG(
     dag_id='lab03_it_ingestion',
     default_args=default_args,
-    schedule_interval=None,
+    schedule=None,
     catchup=False,
     tags=['kx', 'lab3', 'it', 'ingestion', 'airflow3'],
     description='Lab 3: ท่อส่งข้อมูล IT สกัดเอกสาร PDF และบันทึกเวกเตอร์ลงคลัง kx_it_documents'

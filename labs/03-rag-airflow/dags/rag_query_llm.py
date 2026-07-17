@@ -18,7 +18,7 @@ default_args = {
 with DAG(
     dag_id='lab03_rag_query_llm',
     default_args=default_args,
-    schedule_interval=None,
+    schedule=None,
     catchup=False,
     tags=['kx', 'lab3', 'query', 'llm', 'airflow3'],
     description='Lab 3: สอบถามข้อมูล RAG (HR/IT) แยกถัง และตอบกลับผ่านโมเดล Gemini โดยใช้ @task.llm'

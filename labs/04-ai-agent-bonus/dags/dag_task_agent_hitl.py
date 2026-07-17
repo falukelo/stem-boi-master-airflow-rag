@@ -60,7 +60,7 @@ def search_it_db_tool(query: str) -> str:
 with DAG(
     dag_id='lab04_multi_agent_hitl',
     default_args=default_args,
-    schedule_interval=None,
+    schedule=None,
     catchup=False,
     tags=['kx', 'lab4', 'multiagent', 'hitl', 'airflow3'],
     description='Lab 4: การทำงานร่วมกันแบบ Multi-Agent (HR/IT Router) และตรวจสอบผลลัพธ์ผ่าน HITL'
