@@ -21,17 +21,16 @@
 
 ```mermaid
 graph TD
-    Query[รับคำถามพนักงาน] --> Router["route_query_classification (@task.llm Router)"]
-    Router --> Branch{branching_decision_task: แตกสาย}
-    Branch -->|HR| HRAgent["hr_specialist_agent (@task.agent): ค้น kx_hr_documents"]
-    Branch -->|IT| ITAgent["it_specialist_agent (@task.agent): ค้น kx_it_documents"]
+    Query[รับคำถามพนักงาน] --> Router["route_query_classification (@task.llm_branch Router)"]
+    Router -->|HR| HRAgent["hr_specialist_agent (@task.agent): ค้น kx_hr_documents"]
+    Router -->|IT| ITAgent["it_specialist_agent (@task.agent): ค้น kx_it_documents"]
     HRAgent --> Collector[collect_agent_response: รวบรวมคำตอบ]
     ITAgent --> Collector
     Collector --> HITL["wait_for_human_review (HITLOperator)"]
     HITL --> Save[save_final_response: บันทึกผลสำเร็จ]
 ```
 
-*   **`route_query_classification`**: ตกแต่งด้วย `@task.llm` ทำหน้าที่เป็น Router แยกประเภทคำถามพนักงานผ่าน Gemini โดยตรงเชื่อมโยงผ่าน Connection ID
+*   **`route_query_classification`**: ตกแต่งด้วย `@task.llm_branch` ทำหน้าที่จำแนกคำถามและแตกกิ่งพาร์ทเส้นทางไปยัง Task ID ปลายทางในขั้นตอนเดียว
 *   **Specialist Agents**: ตกแต่งด้วย `@task.agent` ทำงานคิดแบบ ReAct Loop เข้าถึงถังข้อมูลเฉพาะฝ่ายตนเองผ่านเครื่องมือช่วยสืบค้น
 
 ---
@@ -54,7 +53,7 @@ graph TD
   "query": "รหัสผ่านไอทีต้องตั้งอย่างน้อยกี่ตัวอักษร และเคลมคอมพิวเตอร์ใหม่ได้เมื่อไร?"
 }
 ```
-*   **ผลการทำงาน**: ตัววิเคราะห์ (Router `@task.llm`) จะประเมินและจำแนกว่าเป็น "IT" และแตกสายงานรันเฉพาะ Task `it_specialist_agent` (HR agent จะขึ้นสถานะ skipped สีชมพู)
+*   **ผลการทำงาน**: ตัววิเคราะห์ (Router `@task.llm_branch`) จะประเมินและจำแนกว่าเป็น "IT" และแตกกิ่งไปรันเฉพาะ Task `it_specialist_agent` ทันที (HR agent จะขึ้นสถานะ skipped สีชมพู)
 
 #### กรณีทดสอบ 2: ถามคำถามฝ่าย HR สวัสดิการ
 ```json

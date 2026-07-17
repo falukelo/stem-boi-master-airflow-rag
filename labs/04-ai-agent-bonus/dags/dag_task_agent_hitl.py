@@ -74,24 +74,16 @@ with DAG(
         query = dag_run_conf.get('query', "รหัสผ่านไอทีต้องตั้งอย่างน้อยกี่ตัวอักษร และเคลมคอมพิวเตอร์ใหม่ได้เมื่อไร?")
         return query
 
-    # 2. วิเคราะห์จำแนกหมวดหมู่ด้วย LLM (Router) เพื่อเลือกสายงาน (ใช้ @task.llm ในการจำแนกสิทธิ)
-    @task.llm(llm_conn_id="gemini_conn")
-    def route_query_classification(query: str, system_prompt: str = "คุณเป็น Router จำแนกประเภทคำถามพนักงาน"):
+    # 2. วิเคราะห์และแตกแขนงงานแบบมีเงื่อนไขในขั้นตอนเดียวด้วย @task.llm_branch (Airflow 3 ฟีเจอร์)
+    @task.llm_branch(llm_conn_id="gemini_conn")
+    def route_query_classification(query: str, system_prompt: str = "คุณเป็น LLM Router ตรวจวิเคราะห์และส่งต่อคำถามพนักงาน"):
         prompt = f"""วิเคราะห์คำถามพนักงานต่อไปนี้: "{query}"
 ประเภทคำถามแบ่งออกเป็นสองฝ่าย:
-- HR: เกี่ยวกับวันลาพักร้อน, นโยบายการลาทำงาน WFH/Hybrid, ค่าเบิกเคลมรักษาพยาบาล, dental care, งบการเรียนรู้
-- IT: เกี่ยวกับเครื่องคอมพิวเตอร์ laptop, การลงลิขสิทธิ์ซอฟต์แวร์, นโยบายรหัสผ่าน Password complexity, ความปลอดภัยเน็ตเวิร์ก VPN, ปัญหาเทคนิค IT support
+- HR Specialist Agent: หากคำถามเกี่ยวกับวันลาพักร้อน, นโยบายการลาทำงาน WFH/Hybrid, ค่ารักษาพยาบาล, dental care, งบการเรียนรู้ (ให้ตอบกลับด้วยคำว่า 'hr_specialist_agent')
+- IT Specialist Agent: หากคำถามเกี่ยวกับเครื่องโน้ตบุ๊ก laptop, การขอลิขสิทธิ์โปรแกรม, นโยบายความยากรหัสผ่าน Password complexity, ความปลอดภัยเน็ตเวิร์ก VPN, ปัญหาเทคนิค IT support (ให้ตอบกลับด้วยคำว่า 'it_specialist_agent')
 
-ให้ตอบกลับด้วยคำภาษาอังกฤษเพียงคำเดียวเท่านั้นว่า 'HR' หรือ 'IT' ห้ามอธิบายเหตุผล"""
+ให้ตอบกลับด้วยคำภาษาอังกฤษที่เป็นชื่อ Task ID ปลายทางที่ต้องการส่งไปทำงานต่อเพียงคำเดียวเท่านั้น ('hr_specialist_agent' หรือ 'it_specialist_agent') ห้ามมีคำชี้แจงหรือประโยคเพิ่มเติมเด็ดขาด"""
         return f"{system_prompt}. Prompt: {prompt}"
-
-    # 3. แตกแขนงงาน (Branch Task)
-    @task.branch
-    def branching_decision_task(classification: str):
-        if "IT" in classification:
-            return "it_specialist_agent"
-        else:
-            return "hr_specialist_agent"
 
     # 4. HR Expert Agent Task (เอเจนต์เฉพาะทาง HR)
     @task.agent(
@@ -142,8 +134,7 @@ with DAG(
 
     # การโยงลำดับการไหลของข้อมูลความสัมพันธ์
     query_val = receive_user_query()
-    class_val = route_query_classification(query_val)
-    branch_val = branching_decision_task(class_val)
+    branch_val = route_query_classification(query_val)
     
     # กำหนดเส้นทางแบบแตกแขนง
     hr_val = hr_specialist_agent(query_val)
@@ -154,7 +145,7 @@ with DAG(
     save_val = save_final_response(collector_val, query_val)
 
     # กำหนดลำดับงานเชิงกราฟ (Graph Dependencies)
-    query_val >> class_val >> branch_val
+    query_val >> branch_val
     branch_val >> hr_specialist_agent >> collector_val
     branch_val >> it_specialist_agent >> collector_val
     collector_val >> wait_for_human_review >> save_val
