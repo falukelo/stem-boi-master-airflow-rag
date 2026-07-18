@@ -6,6 +6,7 @@ from airflow.decorators import task
 from airflow.providers.standard.operators.hitl import HITLOperator
 from google import genai
 from google.genai import types
+from pydantic_ai.toolsets.function import FunctionToolset
 import chromadb
 
 CHROMA_DB_PATH = "/opt/airflow/data/chromadb"
@@ -89,7 +90,7 @@ with DAG(
     # 4. HR Expert Agent Task (เอเจนต์เฉพาะทาง HR)
     @task.agent(
         llm_conn_id="gemini_conn",
-        toolsets=[search_hr_db_tool],
+        toolsets=[FunctionToolset(tools=[search_hr_db_tool])],
         system_prompt="คุณเป็นเอเจนต์ผู้เชี่ยวชาญด้านกฎระเบียบ HR ให้ใช้เครื่องมือสืบค้นข้อมูล HR และสรุปคำตอบให้ชัดเจนอิงตามแหล่งข้อมูลเท่านั้น"
     )
     def hr_specialist_agent(query: str):
@@ -98,7 +99,7 @@ with DAG(
     # 5. IT Expert Agent Task (เอเจนต์เฉพาะทาง IT)
     @task.agent(
         llm_conn_id="gemini_conn",
-        toolsets=[search_it_db_tool],
+        toolsets=[FunctionToolset(tools=[search_it_db_tool])],
         system_prompt="คุณเป็นเอเจนต์ผู้เชี่ยวชาญด้านระบบ IT Support และความปลอดภัย ให้ใช้เครื่องมือสืบค้นข้อมูล IT และสรุปคู่มือตอบกลับพนักงานให้ชัดเจนและปลอดภัย"
     )
     def it_specialist_agent(query: str):
