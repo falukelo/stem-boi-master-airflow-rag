@@ -114,11 +114,16 @@ with DAG(
     # 7. คอยหยุดเพื่อทวนสอบความถูกต้องโดยผู้ดูแลระบบ (Human-in-the-Loop)
     wait_for_human_review = HITLOperator(
         task_id='wait_for_human_review',
-        message="กรุณาตรวจสอบเนื้อหาและอนุมัติคำตอบที่วิเคราะห์โดย Multi-Agent ระบบด้านล่างนี้",
-        context_data={
-            "agent_response": "{{ task_instance.xcom_pull(task_ids='collect_agent_response') }}",
-            "original_query": "{{ task_instance.xcom_pull(task_ids='receive_user_query') }}"
-        }
+        subject="กรุณาตรวจสอบและอนุมัติคำตอบที่วิเคราะห์โดย Multi-Agent",
+        body=(
+            "**คำถามของพนักงาน:**\n\n"
+            "{{ task_instance.xcom_pull(task_ids='receive_user_query') }}\n\n"
+            "---\n\n"
+            "**คำตอบที่เอเจนต์วิเคราะห์:**\n\n"
+            "{{ task_instance.xcom_pull(task_ids='collect_agent_response') }}"
+        ),
+        options=["อนุมัติ", "ปฏิเสธ"],
+        defaults=["อนุมัติ"],
     )
 
     # 8. บันทึกคำตอบลงในเครื่องเซิร์ฟเวอร์หลัก
@@ -146,7 +151,7 @@ with DAG(
     save_val = save_final_response(collector_val, query_val)
 
     # กำหนดลำดับงานเชิงกราฟ (Graph Dependencies)
-    query_val >> branch_val
-    branch_val >> hr_specialist_agent >> collector_val
-    branch_val >> it_specialist_agent >> collector_val
+    # Router แตกแขนงไปยังเอเจนต์ที่ถูกเลือก (อีกตัวจะถูก skip)
+    branch_val >> [hr_val, it_val]
+    # ผ่านการทวนสอบโดยมนุษย์ (HITL) ก่อนบันทึกผลลัพธ์
     collector_val >> wait_for_human_review >> save_val
