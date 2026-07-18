@@ -3,7 +3,8 @@ from datetime import datetime, timedelta
 import os
 from airflow import DAG
 from airflow.decorators import task
-import google.genai as genai
+from google import genai
+from google.genai import types
 import chromadb
 
 CHROMA_DB_PATH = "/opt/airflow/data/chromadb"
@@ -49,14 +50,15 @@ with DAG(
             collection = chroma_client.get_collection(name=collection_name)
             
             gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
-            genai.configure(api_key=gemini_api_key)
-            
+            client = genai.Client(api_key=gemini_api_key)
+
             # แปลงคำถามเป็นเวกเตอร์
-            query_vector = genai.embed_content(
+            embed_result = client.models.embed_content(
                 model="models/gemini-embedding-2",
-                content=query,
-                task_type="retrieval_query"
-            )['embedding']
+                contents=query,
+                config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY")
+            )
+            query_vector = embed_result.embeddings[0].values
             
             # ค้นหา 2 ชิ้นที่ใกล้ที่สุด
             results = collection.query(

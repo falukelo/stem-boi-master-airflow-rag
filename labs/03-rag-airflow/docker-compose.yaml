@@ -13,7 +13,7 @@ x-airflow-common:
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
     AIRFLOW__CORE__AUTH_MANAGER: 'airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager'
-    _PIP_ADDITIONAL_REQUIREMENTS: 'apache-airflow-providers-common-ai google-generativeai chromadb langchain-text-splitters pymupdf'
+    _PIP_ADDITIONAL_REQUIREMENTS: 'apache-airflow-providers-common-ai google-genai chromadb langchain-text-splitters pymupdf'
     AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-api-server:8080/execution'
     GEMINI_API_KEY: ${GEMINI_API_KEY}
   volumes:
@@ -80,7 +80,7 @@ services:
     <<: *airflow-common
     container_name: airflow_init
     entrypoint: /bin/bash
-    # Install additional python dependencies like google-generativeai, chromadb, etc.
+    # Install additional python dependencies like google-genai, chromadb, etc.
     command:
       - -c
       - |

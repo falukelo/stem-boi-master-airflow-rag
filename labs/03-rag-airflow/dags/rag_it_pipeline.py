@@ -7,7 +7,8 @@ from airflow import DAG
 from airflow.decorators import task
 from airflow.providers.standard.sensors.filesystem import FileSensor
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-import google.genai as genai
+from google import genai
+from google.genai import types
 import chromadb
 
 DATA_DIR = "/opt/airflow/data"
@@ -67,19 +68,19 @@ with DAG(
         gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
         if not gemini_api_key:
             raise ValueError("GEMINI_API_KEY is not set!")
-        genai.configure(api_key=gemini_api_key)
-        
+        client = genai.Client(api_key=gemini_api_key)
+
         embedded_data = []
         for i, chunk in enumerate(chunks):
-            result = genai.embed_content(
+            result = client.models.embed_content(
                 model="models/gemini-embedding-2",
-                content=chunk,
-                task_type="retrieval_document"
+                contents=chunk,
+                config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT")
             )
             embedded_data.append({
                 "id": f"it_{datetime.now().strftime('%Y%m%d%H%M%S')}_{i}",
                 "chunk": chunk,
-                "embedding": result['embedding']
+                "embedding": result.embeddings[0].values
             })
         return embedded_data
     

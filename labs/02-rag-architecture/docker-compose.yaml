@@ -13,4 +13,4 @@ services:
     entrypoint: []
     # Auto install required packages on start and run jupyter lab
     command: >
-      bash -c "pip install google-generativeai chromadb langchain-text-splitters PyMuPDF && start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''"
+      bash -c "pip install google-genai chromadb langchain-text-splitters PyMuPDF && start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''"
