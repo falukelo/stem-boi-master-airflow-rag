@@ -34,9 +34,9 @@ with DAG(
 
     # 2. ค้นหาเอกสารอ้างอิงจากคลังข้อมูลเวกเตอร์ ChromaDB ตามขอบเขตโดเมน
     @task
-    def retrieve_context(params: dict):
-        query = params["query"]
-        domain = params["domain"].lower().strip()
+    def retrieve_context(payload: dict):
+        query = payload["query"]
+        domain = payload["domain"].lower().strip()
         
         # เลือกคอลเลกชันตามโดเมน
         if domain == "it":
@@ -78,7 +78,17 @@ with DAG(
         user_prompt = f"ขอบเขตข้อมูลวิเคราะห์: แผนก {domain}\nเอกสารอ้างอิง:\n{context_data}\n\nคำถามจากพนักงาน: {query}"
         return f"{system_prompt}. Prompt: {user_prompt}"
 
+    # 4. นำคำตอบจาก LLM (ที่ดึงมาจาก XCom) มาแสดงผลใน log
+    @task
+    def print_llm_response(llm_response: str):
+        print("=" * 60)
+        print("คำตอบจาก LLM:")
+        print(llm_response)
+        print("=" * 60)
+        return llm_response
+
     # ลำดับโฟลว์งาน
     params_val = receive_query_and_domain()
     context_data_val = retrieve_context(params_val)
     response_val = generate_response_with_llm(context_data_val)
+    print_llm_response(response_val)
