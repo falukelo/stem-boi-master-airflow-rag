@@ -11,29 +11,27 @@ import google.genai as genai
 import chromadb
 
 DATA_DIR = "/opt/airflow/data"
-HR_DIR = "/opt/airflow/data/hr"
+IT_DIR = "/opt/airflow/data/it"
 PROCESSED_DIR = "/opt/airflow/data/processed"
 CHROMA_DB_PATH = "/opt/airflow/data/chromadb"
 
 default_args = {
     'owner': 'KX',
-    'start_date': datetime(2026, 6, 1),
-    'retries': 3,
-    'retry_delay': timedelta(seconds=10),
+    'start_date': datetime(2026, 7, 1),
+    'retries': 5,
+    'retry_delay': timedelta(seconds=30)
 }
 
 with DAG(
-    dag_id='lab03_hr_ingestion',
+    dag_id = 'lab03_it_ingrestion',
     default_args=default_args,
-    schedule="*/15 * * * *",
+    schedule="0 1 * * *",
     catchup=False,
-    tags=['kx', 'lab3', 'hr', 'ingestion', 'airflow3'],
-    description='Lab 3: ท่อส่งข้อมูล HR สกัดเอกสาร PDF และบันทึกเวกเตอร์ลงคลัง kx_hr_documents'
+    tags=['kx', 'it']
 ) as dag:
-
     wait_for_file = FileSensor(
-        task_id='wait_for_hr_document',
-        filepath=os.path.join(HR_DIR, '*.pdf'),  # คอยตรวจจับไฟล์ PDF ใด ๆ ในโฟลเดอร์ data/hr
+        task_id='wait_for_it_document',
+        filepath=os.path.join(IT_DIR, '*.pdf'),  # คอยตรวจจับไฟล์ PDF ใด ๆ ในโฟลเดอร์ data/hr
         fs_conn_id='fs_default',
         poke_interval=15,
         timeout=600,
@@ -43,9 +41,9 @@ with DAG(
     @task
     def read_pdf_task():
         import fitz
-        pdf_files = sorted(glob.glob(os.path.join(HR_DIR, "*.pdf")))
+        pdf_files = sorted(glob.glob(os.path.join(IT_DIR, "*.pdf")))
         if not pdf_files:
-            raise FileNotFoundError(f"ไม่พบไฟล์ PDF ใน {HR_DIR}")
+            raise FileNotFoundError(f"ไม่พบไฟล์ PDF ใน {IT_DIR}")
         file_path = pdf_files[0]
 
         doc = fitz.open(file_path)
@@ -54,7 +52,7 @@ with DAG(
             document_content += page.get_text()
             
         return document_content
-
+    
     @task
     def chunk_text_task(raw_text: str):
         splitter = RecursiveCharacterTextSplitter(
@@ -63,7 +61,7 @@ with DAG(
             separators=["\n\n", "\n", " ", ""]
         )
         return splitter.split_text(raw_text)
-
+    
     @task
     def embed_text_task(chunks: list):
         gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
@@ -79,16 +77,16 @@ with DAG(
                 task_type="retrieval_document"
             )
             embedded_data.append({
-                "id": f"hr_{datetime.now().strftime('%Y%m%d%H%M%S')}_{i}",
+                "id": f"it_{datetime.now().strftime('%Y%m%d%H%M%S')}_{i}",
                 "chunk": chunk,
                 "embedding": result['embedding']
             })
         return embedded_data
-
+    
     @task
     def insert_to_vector_db_task(embedded_data: list):
         chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
-        collection_name = "kx_hr_documents"  # จัดเก็บในถัง HR แยกต่างหาก
+        collection_name = "kx_it_documents"  # จัดเก็บในถัง HR แยกต่างหาก
         
         try:
             chroma_client.delete_collection(name=collection_name)
@@ -96,7 +94,7 @@ with DAG(
             pass
         collection = chroma_client.create_collection(name=collection_name)
 
-        pdf_files = sorted(glob.glob(os.path.join(HR_DIR, "*.pdf")))
+        pdf_files = sorted(glob.glob(os.path.join(IT_DIR, "*.pdf")))
         source_name = os.path.basename(pdf_files[0])
 
         ids = [item["id"] for item in embedded_data]
@@ -114,14 +112,13 @@ with DAG(
         # ย้ายไฟล์หลังนำเข้าสำเร็จ
         file_path = pdf_files[0]
         os.makedirs(PROCESSED_DIR, exist_ok=True)
-        dest_path = os.path.join(PROCESSED_DIR, f"processed_hr_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf")
+        dest_path = os.path.join(PROCESSED_DIR, f"processed_it_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf")
         shutil.move(file_path, dest_path)
         
-        return f"บันทึกข้อมูล HR เรียบร้อยจำนวน {len(embedded_data)} Chunks"
-
+        return f"บันทึกข้อมูล IT เรียบร้อยจำนวน {len(embedded_data)} Chunks"
+    
     raw_text = read_pdf_task()
-    chunks = chunk_text_task(raw_text)
-    embedded_data = embed_text_task(chunks)
-    ingestion_status = insert_to_vector_db_task(embedded_data)
-
     wait_for_file >> raw_text
+    chunk_texts = chunk_text_task(raw_text)
+    emded_texts = embed_text_task(chunk_texts)
+    insert_vec = insert_to_vector_db_task(emded_texts)

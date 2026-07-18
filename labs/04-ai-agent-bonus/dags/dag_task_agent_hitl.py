@@ -4,7 +4,7 @@ import os
 from airflow import DAG
 from airflow.decorators import task
 from airflow.providers.standard.operators.hitl import HITLOperator
-import google.generativeai as genai
+import google.genai as genai
 import chromadb
 
 CHROMA_DB_PATH = "/opt/airflow/data/chromadb"

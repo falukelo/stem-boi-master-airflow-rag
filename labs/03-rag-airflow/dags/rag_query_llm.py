@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import os
 from airflow import DAG
 from airflow.decorators import task
-import google.generativeai as genai
+import google.genai as genai
 import chromadb
 
 CHROMA_DB_PATH = "/opt/airflow/data/chromadb"
