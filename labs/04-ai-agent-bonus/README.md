@@ -17,7 +17,7 @@
 
 ---
 
-## 2. ขั้นตอนการทำงานภายในท่อส่งข้อมูล (`lab04_multi_agent_hitl`)
+## 2. ขั้นตอนการทำงานภายใน pipeline ส่งข้อมูล (`lab04_multi_agent_hitl`)
 
 ```mermaid
 graph TD
