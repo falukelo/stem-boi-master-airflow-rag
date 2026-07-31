@@ -38,17 +38,10 @@
        ```
 2. แก้ไขไฟล์ `.env` โดยระบุค่าต่าง ๆ ดังนี้:
    *   **ระบุ GEMINI_API_KEY**: กรอกคีย์ของโครงการคุณ
-   *   **ระบุ AIRFLOW_UID (สำคัญมากสำหรับ macOS / Linux)**: สั่งคำนวณสิทธิ์ UID ของคุณลงในไฟล์ `.env` เพื่อไม่ให้ Docker ล็อกสิทธิ์แก้ไขไฟล์บนเครื่องหลัก:
-       *   **macOS / Linux (Terminal)**:
-           ```bash
-           echo "AIRFLOW_UID=$(id -u)" >> .env
-           ```
-       *   **Windows (PowerShell/CMD)**: สำหรับระบบปฏิบัติการ Windows ไม่ต้องเขียนระบุค่า `AIRFLOW_UID` (ให้ข้ามขั้นตอนนี้ไปได้เลย เนื่องจาก Windows Docker Desktop จะแชร์สิทธิ์เข้าเครื่องโฮสต์ผ่าน WSL2 หรือ Hyper-V เป็น root เสมอ)
 3. ค่าตัวอย่างในไฟล์ `.env` ที่ถูกต้อง:
    *   **สำหรับ macOS / Linux**:
        ```text
        GEMINI_API_KEY="your-gemini-key"
-       AIRFLOW_UID=1000
        ```
    *   **สำหรับ Windows**:
        ```text
