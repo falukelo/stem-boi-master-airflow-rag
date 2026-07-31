@@ -54,7 +54,7 @@
 รันคำสั่ง Docker-Compose เพื่อสร้างและเปิดการทำงานของ Service:
 *   **ทุกระบบปฏิบัติการ (macOS, Linux, Windows)**:
     ```bash
-    docker-compose up -d
+    docker compose up -d
     ```
 *(เข้าควบคุมหน้าจอระบบจำลองที่ `http://localhost:8080` (Username: `admin` / Password: `admin`))*
 
