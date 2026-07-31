@@ -47,7 +47,7 @@
 รันคำสั่ง Docker-Compose ในโฟลเดอร์นี้เพื่อเริ่มระบบ Jupyter Notebook:
 *   **ทุกระบบปฏิบัติการ (macOS, Linux, Windows)**:
     ```bash
-    docker-compose up -d
+    docker compose up -d
     ```
 *ระบบจะเปิดสิทธิ์เว็บเซิร์ฟเวอร์บนพอร์ต `8888` โดยไม่มีการถามรหัสผ่าน (Token-free เพื่อความสะดวกสำหรับผู้เรียน)*
 
