@@ -16,9 +16,10 @@ x-airflow-common:
     _PIP_ADDITIONAL_REQUIREMENTS: 'apache-airflow-providers-common-ai google-genai chromadb langchain-text-splitters pymupdf'
     AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-api-server:8080/execution'
     GEMINI_API_KEY: ${GEMINI_API_KEY}
+    AIRFLOW__LOGGING__DAG_PROCESSOR_LOG_TARGET: 'stdout'
   volumes:
     - ./dags:/opt/airflow/dags
-    - ./logs:/opt/airflow/logs
+    - airflow-logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
     - ./data:/opt/airflow/data
   user: "${AIRFLOW_UID:-50000}:0"
@@ -97,3 +98,4 @@ services:
 
 volumes:
   db-data:
+  airflow-logs:
