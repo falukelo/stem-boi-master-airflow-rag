@@ -2,9 +2,9 @@
 
 ห้องปฏิบัติการนี้มุ่งเน้นการจัดการสถาปัตยกรรมข้อมูลระดับโปรดักชัน โดยเรียนรู้วิธีการแบ่งแยกถังเก็บข้อมูลความรู้ (Vector Storage Buckets) ออกจากกันตามความรับผิดชอบของหน่วยงาน (HR และ IT Support) เพื่อให้ง่ายต่อการขยายระบบและความปลอดภัยข้อมูล โดยแบ่งออกเป็น **3 DAGs** ในระบบ:
 
-1.  **`lab03_hr_ingestion`** (ท่อข้อมูล HR): ตรวจจับไฟล์ PDF ใด ๆ ในโฟลเดอร์ `data/hr/` นำเข้าถังเวกเตอร์ `kx_hr_documents`
-2.  **`lab03_it_ingestion`** (ท่อข้อมูล IT): ตรวจจับไฟล์ PDF ใด ๆ ในโฟลเดอร์ `data/it/` นำเข้าถังเวกเตอร์ `kx_it_documents`
-3.  **`lab03_rag_query_llm`** (ท่อเรียกสอบถาม): รับคำถามพนักงาน ระบุหมวดหมู่การดึงข้อมูล และเรียกใช้ `@task.llm` สรุปคำตอบ
+1.  **`lab03_hr_ingestion`** (pipeline ข้อมูล HR): ตรวจจับไฟล์ PDF ใด ๆ ในโฟลเดอร์ `data/hr/` นำเข้าถังเวกเตอร์ `kx_hr_documents`
+2.  **`lab03_it_ingestion`** (pipeline ข้อมูล IT): ตรวจจับไฟล์ PDF ใด ๆ ในโฟลเดอร์ `data/it/` นำเข้าถังเวกเตอร์ `kx_it_documents`
+3.  **`lab03_rag_query_llm`** (pipeline เรียกสอบถาม): รับคำถามพนักงาน ระบุหมวดหมู่การดึงข้อมูล และเรียกใช้ `@task.llm` สรุปคำตอบ
 
 ---
 
@@ -75,7 +75,7 @@
 
 ## 3. ขั้นตอนการทดสอบทำ RAG
 
-### ขั้นตอนที่ 3.1: รันท่อนำเข้าข้อมูลฝ่าย HR (HR Ingestion Phase)
+### ขั้นตอนที่ 3.1: รันpipeline นำเข้าข้อมูลฝ่าย HR (HR Ingestion Phase)
 1. เปิดสวิตช์เริ่มการทำงาน DAG ชื่อ `lab03_hr_ingestion`
 2. คัดลอกไฟล์เอกสารนโยบาย HR เช่น `labs/mock_documents/policy_leave.pdf` ไปวางในโฟลเดอร์ `./data/hr/` (ใช้ชื่อไฟล์เดิมได้เลย ไม่ต้องเปลี่ยนชื่อ — ตัว Sensor จะดักจับไฟล์ `.pdf` ใด ๆ ที่วางในโฟลเดอร์นี้)
    *   **macOS / Linux**: `cp ../mock_documents/policy_leave.pdf ./data/hr/`
@@ -83,7 +83,7 @@
    *   **Windows (PowerShell)**: `Copy-Item ..\mock_documents\policy_leave.pdf .\data\hr\`
 3. สังเกตหน้าจอ Airflow: ตัว Sensor จะเริ่มรันผ่าน และนำเข้าข้อมูลเวกเตอร์สู่ถัง `kx_hr_documents` จนเสร็จสิ้น
 
-### ขั้นตอนที่ 3.2: รันท่อนำเข้าข้อมูลฝ่าย IT Support (IT Ingestion Phase)
+### ขั้นตอนที่ 3.2: รันpipeline นำเข้าข้อมูลฝ่าย IT Support (IT Ingestion Phase)
 1. เปิดสวิตช์เริ่มการทำงาน DAG ชื่อ `lab03_it_ingestion`
 2. คัดลอกไฟล์เอกสารนโยบายไอทีจำลอง `labs/mock_documents/policy_itsupport.pdf` ไปวางในโฟลเดอร์ `./data/it/` (ใช้ชื่อไฟล์เดิมได้เลย ไม่ต้องเปลี่ยนชื่อ — ตัว Sensor จะดักจับไฟล์ `.pdf` ใด ๆ ที่วางในโฟลเดอร์นี้)
    *   **macOS / Linux**: `cp ../mock_documents/policy_itsupport.pdf ./data/it/`
