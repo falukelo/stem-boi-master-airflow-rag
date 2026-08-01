@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import os
 import glob
 import shutil
+import hashlib
 from airflow import DAG
 from airflow.decorators import task
 from airflow.providers.standard.sensors.filesystem import FileSensor
@@ -73,6 +74,9 @@ with DAG(
         client = genai.Client(api_key=gemini_api_key)
 
         embedded_data = []
+        pdf_files = sorted(glob.glob(os.path.join(HR_DIR, "*.pdf")))
+        source_name = os.path.basename(pdf_files[0])
+        source_hash = hashlib.sha1(source_name.encode("utf-8")).hexdigest()[:10]
         for i, chunk in enumerate(chunks):
             result = client.models.embed_content(
                 model="models/gemini-embedding-2",
@@ -80,7 +84,7 @@ with DAG(
                 config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT")
             )
             embedded_data.append({
-                "id": f"hr_{datetime.now().strftime('%Y%m%d%H%M%S')}_{i}",
+                "id": f"hr_{source_hash}_{i}",
                 "chunk": chunk,
                 "embedding": result.embeddings[0].values
             })
@@ -90,15 +94,13 @@ with DAG(
     def insert_to_vector_db_task(embedded_data: list):
         chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
         collection_name = "kx_hr_documents"  # จัดเก็บในถัง HR แยกต่างหาก
-        
-        try:
-            chroma_client.delete_collection(name=collection_name)
-        except Exception:
-            pass
-        collection = chroma_client.create_collection(name=collection_name)
+        collection = chroma_client.get_or_create_collection(name=collection_name)
 
         pdf_files = sorted(glob.glob(os.path.join(HR_DIR, "*.pdf")))
         source_name = os.path.basename(pdf_files[0])
+        existing = collection.get(where={"source": source_name})
+        if existing.get("ids"):
+            collection.delete(ids=existing["ids"])
 
         ids = [item["id"] for item in embedded_data]
         embeddings = [item["embedding"] for item in embedded_data]
